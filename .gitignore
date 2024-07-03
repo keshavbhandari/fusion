@@ -1,0 +1,7 @@
+# Ignore cache files
+*.cache
+__pycache__/
+*.pyc
+
+# Ignore the artifacts fusion directory
+artifacts/fusion/
