@@ -19,9 +19,9 @@ training:
     learning_rate: 0.0001
     weight_decay: 0.01
     gradient_accumulation_steps: 1
-    use_skyline_threshold: false
-    use_conditions: false
-    run_name: fusion_model_static_no_conditions
+    use_skyline_threshold: true
+    use_conditions: true
+    run_name: fusion_model_dynamic_conditions
 
 raw_data:
   raw_data_folders: 
