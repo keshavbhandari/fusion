@@ -142,7 +142,27 @@ class DataCorruption:
 
         return ['incorrect_transposition'] + data, 'incorrect_transposition'
 
-    def apply_random_corruption(self, data: List[Union[str, List[Union[str, int]]]]) -> Dict[str, Union[List[Union[str, List[Union[str, int]]]], str, bool]]:
+    def shorten_list(self, lst, index, segment_indices, context_before, context_after):
+        # Ensure the list is not empty and the index is within bounds
+        if not lst or index < 0 or index >= len(lst):
+            raise ValueError("List is empty or index is out of bounds")
+        
+        # Get index of the segment based on index
+        segment_index = segment_indices.index(index)
+        
+        # Calculate start and end indices for slicing
+        context_before = random.randint(1, context_before)
+        start_index = max(segment_index - context_before, 0)
+        end_index = min(segment_index + context_after, len(segment_indices))
+        actual_start_index = segment_indices[start_index]
+        actual_end_index = segment_indices[end_index] + 1 # context_after + 1 to include the next single item
+        
+        # Slice the list to get the desired elements
+        shortened_list = lst[actual_start_index:actual_end_index]
+        
+        return shortened_list
+
+    def apply_random_corruption(self, data: List[Union[str, List[Union[str, int]]]], context_before = 5, context_after = 1) -> Dict[str, Union[List[Union[str, List[Union[str, int]]]], str, bool]]:
         """
         Apply a random corruption function to a segment of the data.
         """
@@ -160,11 +180,14 @@ class DataCorruption:
 
         corrupted_data = copy.deepcopy(data)
         corrupted_data = self.seperateitems(corrupted_data)
-        all_segment_idx, index, segment, last_idx_flag = self.get_segment_to_corrupt(corrupted_data)
+        all_segment_indices, index, segment, last_idx_flag = self.get_segment_to_corrupt(corrupted_data)
         segment_copy = copy.deepcopy(segment)
 
         corrupted_segment, corruption_type = corruption_function(segment_copy)
         corrupted_data[index] = corrupted_segment
+
+        # Modify corrupted_data to shorten context before and after the corrupted segment
+        corrupted_data = self.shorten_list(corrupted_data, index, all_segment_indices, context_before=context_before, context_after=context_after)
 
         # Concatenate back the corrupted data
         corrupted_data_sequence = []
