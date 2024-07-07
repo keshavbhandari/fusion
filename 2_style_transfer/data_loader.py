@@ -15,9 +15,11 @@ from torch.nn import functional as F
 from aria.data.midi import MidiDict
 from aria.tokenizer import AbsTokenizer
 
+from corruptions import DataCorruption
+
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(os.path.dirname(SCRIPT_DIR))
-from utils.utils import flatten, unflatten, skyline, get_conditions, separate_list, interleave_conditions
+from utils.utils import flatten, unflatten, skyline, unflatten_corrupted
 
 
 class Fusion_Dataset(Dataset):
@@ -30,19 +32,18 @@ class Fusion_Dataset(Dataset):
         # Artifact folder
         self.artifact_folder = configs['raw_data']['artifact_folder']
         # Load encoder tokenizer json file dictionary
-        tokenizer_filepath = os.path.join(self.artifact_folder, "fusion", "vocab.pkl")
+        tokenizer_filepath = os.path.join(self.artifact_folder, "fusion", "vocab_corrupted.pkl")
 
         self.aria_tokenizer = AbsTokenizer()
         # Load the pickled tokenizer dictionary
         with open(tokenizer_filepath, 'rb') as f:
             self.tokenizer = pickle.load(f)
 
+        self.corruption_obj = DataCorruption()
+
         # Get the maximum sequence length
         self.encoder_max_sequence_length = configs['model']['fusion_model']['encoder_max_sequence_length']
         self.decoder_max_sequence_length = configs['model']['fusion_model']['decoder_max_sequence_length']
-
-        self.use_skyline_threshold = configs['training']['fusion']['use_skyline_threshold']
-        self.use_conditions = configs['training']['fusion']['use_conditions']
 
         # Print length of dataset
         print("Length of dataset: ", len(self.data_list))
@@ -65,68 +66,25 @@ class Fusion_Dataset(Dataset):
 
         return sequence_copy
     
-    def remove_initial_tokens(self, data):
-        result = []
-        tokens_started = False
-        
-        for item in data:
-            if isinstance(item, tuple) and item[0] == 'piano':
-                result.append(item)
-                tokens_started = True
-            elif not tokens_started:
-                if item != "<T>":
-                    result.append(item)
-            else:
-                result.append(item)
-
-        return result
     
-
-    def get_melody_extracted_sequences(self, target_sequence):
+    def get_corrupted_sequence(self, sequence, meta_data):
         # Take the 3rd token as the start token until the 2nd last token
-        target_sequence = target_sequence[2:-1]
-
-        # Get random crop of the sequence of length max_sequence_length
-        piano_token_indices = [i for i in range(len(target_sequence)) if target_sequence[i][0] == "piano"]
-        # Exclude the last token of piano_token_indices to generate at least one token
-        piano_token_indices = piano_token_indices[:-1]
-
-        if len(piano_token_indices) > 0:
-            # Choose the start index randomly
-            start_idx = random.choice(piano_token_indices)
-        else:
-            print("No piano tokens found in the sequence for file")
-            assert len(piano_token_indices) > 0
-
-        # Crop the sequence
-        end_idx = start_idx + self.decoder_max_sequence_length - 2
-        target_sequence = target_sequence[start_idx:end_idx]
+        sequence = sequence[2:-1]
 
         # Call the flatten function
-        flattened_sequence = flatten(target_sequence, add_special_tokens=True)
-        
-        if self.use_skyline_threshold:
-            min_pitch_threshold = random.randint(55, 65)
-        else: 
-            min_pitch_threshold = 0
-        # Call the skyline function
-        melody, _ = skyline(flattened_sequence, diff_threshold=30, static_velocity=True, pitch_threshold=min_pitch_threshold)
+        flattened_sequence = flatten(sequence, add_special_tokens=True)
 
-        # Get melody to total ratio
-        if len(melody) > 0:
-            if self.use_conditions:
-                separated_flattened_sequence = separate_list(flattened_sequence)
-                cfr_list, cd_list = get_conditions(separated_flattened_sequence)
-                conditioned_flattened_sequence = interleave_conditions(melody, cfr_list, cd_list)
-                melody = unflatten(conditioned_flattened_sequence)
-            else:
-                melody = unflatten(melody)                
+        # Corrupt the flattened sequence
+        context_before = random.randint(1, 5)
+        context_after = 1
+        output_dict = self.corruption_obj.apply_random_corruption(flattened_sequence, context_before=context_before, context_after=context_after, meta_data=meta_data)
+        corrupted_sequence = output_dict['corrupted_sequence']
+        original_segment = output_dict['original_segment']
 
-        target_sequence = flatten(target_sequence, add_special_tokens=True)
-        target_sequence = unflatten(target_sequence)
+        corrupted_sequence, original_segment = unflatten_corrupted(corrupted_sequence), unflatten(original_segment)
 
-        return target_sequence, melody
-        
+        return corrupted_sequence, original_segment
+
 
     def __getitem__(self, idx):
         sequence_info = self.data_list[idx]
@@ -140,37 +98,29 @@ class Fusion_Dataset(Dataset):
             pitch_aug_function = self.aria_tokenizer.export_pitch_aug(12)
             tokenized_sequence = pitch_aug_function(tokenized_sequence)
 
-
-            tokenized_sequence, melody = self.get_melody_extracted_sequences(tokenized_sequence)
-
-        # Add the meta tokens to the input tokens
-        input_tokens = meta_tokens + ["SEP"] + melody
-        # input_tokens = melody
-
-        # Trim the sequences if it is longer than expected
-        if len(tokenized_sequence) >= self.decoder_max_sequence_length-2:
-            tokenized_sequence = tokenized_sequence[-self.decoder_max_sequence_length-2:]
+            input_tokens, original = self.get_corrupted_sequence(tokenized_sequence, meta_tokens)
+        
         # Add the start and end tokens
-        tokenized_sequence = ["<S>"] + tokenized_sequence + ["<E>"]
+        original = ["<S>"] + original + ["<E>"]
 
         # Tokenize the melody and harmony sequences
         input_tokens = [self.tokenizer[tuple(token)] if isinstance(token, list) else self.tokenizer[token] for token in input_tokens]
-        tokenized_sequence = [self.tokenizer[tuple(token)] if isinstance(token, list) else self.tokenizer[token] for token in tokenized_sequence]
+        original = [self.tokenizer[tuple(token)] if isinstance(token, list) else self.tokenizer[token] for token in original]
 
         # Pad the sequences
-        if len(tokenized_sequence) < self.decoder_max_sequence_length:
-            tokenized_sequence = F.pad(torch.tensor(tokenized_sequence), (0, self.decoder_max_sequence_length - len(tokenized_sequence))).to(torch.int64)
+        if len(original) < self.decoder_max_sequence_length:
+            original = F.pad(torch.tensor(original), (0, self.decoder_max_sequence_length - len(original))).to(torch.int64)
         else:
-            tokenized_sequence = torch.tensor(tokenized_sequence[-self.decoder_max_sequence_length:]).to(torch.int64)
+            original = torch.tensor(original[0:self.decoder_max_sequence_length]).to(torch.int64)
         if len(input_tokens) < self.encoder_max_sequence_length:
             input_tokens = F.pad(torch.tensor(input_tokens), (0, self.encoder_max_sequence_length - len(input_tokens))).to(torch.int64)
         else:
-            input_tokens = torch.tensor(input_tokens[-self.encoder_max_sequence_length:]).to(torch.int64)
+            input_tokens = torch.tensor(input_tokens[0:self.encoder_max_sequence_length]).to(torch.int64)
 
         # Attention mask based on non-padded tokens of the phrase
         attention_mask = torch.where(input_tokens != 0, 1, 0).type(torch.bool)
 
-        train_data = {"input_ids": input_tokens, "labels": tokenized_sequence, "attention_mask": attention_mask}
+        train_data = {"input_ids": input_tokens, "labels": original, "attention_mask": attention_mask}
 
         return train_data
 
@@ -182,7 +132,7 @@ if __name__ == "__main__":
 
     # Parse command line arguments
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config", type=str, default=os.path.normpath("configs/configs_os.yaml"),
+    parser.add_argument("--config", type=str, default=os.path.normpath("configs/configs_style_transfer.yaml"),
                         help="Path to the config file")
     args = parser.parse_args()
 
@@ -193,13 +143,13 @@ if __name__ == "__main__":
     artifact_folder = configs["raw_data"]["artifact_folder"]
     raw_data_folders = configs["raw_data"]["raw_data_folders"]
 
-    # Get tokenizer
-    tokenizer_filepath = os.path.join(artifact_folder, "fusion", "vocab.pkl")
-    # Load the tokenizer dictionary
-    with open(tokenizer_filepath, "rb") as f:
-        tokenizer = pickle.load(f)
-    # Reverse the tokenizer
-    decode_tokenizer = {v: k for k, v in tokenizer.items()}
+    # # Get tokenizer
+    # tokenizer_filepath = os.path.join(artifact_folder, "fusion", "vocab_corrupted.pkl")
+    # # Load the tokenizer dictionary
+    # with open(tokenizer_filepath, "rb") as f:
+    #     tokenizer = pickle.load(f)
+    # # Reverse the tokenizer
+    # decode_tokenizer = {v: k for k, v in tokenizer.items()}
 
 
     # Open the train, validation, and test set files

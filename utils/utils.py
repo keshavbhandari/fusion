@@ -216,41 +216,6 @@ def flatten(sequence, add_special_tokens=True):
 
     return flattened_sequence
 
-# # Reverse the flattened function
-# def unflatten(sequence, static_velocity=False):
-#     unflattened_sequence = []
-#     for i in range(len(sequence)):
-#         if sequence[i] == "<T>":
-#             unflattened_sequence.append("<T>")
-#             continue
-#         elif sequence[i] == "<D>":
-#             unflattened_sequence.append("<D>")
-#             continue
-#         elif type(sequence[i]) == tuple:
-#             unflattened_sequence.append(sequence[i])
-#         else:
-#             if static_velocity:
-#                 note_info = ("piano", sequence[i][0], 90)
-#             else:
-#                 note_info = ("piano", sequence[i][0], sequence[i][1])
-#             unflattened_sequence.append(note_info)
-#             note_info = ("onset", sequence[i][2])
-#             unflattened_sequence.append(note_info)
-#             note_info = ("dur", sequence[i][3])
-#             unflattened_sequence.append(note_info)
-#             note_info = []
-            
-#             if i < len(sequence)-1:
-#                 if sequence[i+1] == "<T>":
-#                     continue
-#                 elif sequence[i+1] == "<D>":
-#                     continue
-#                 else: 
-#                     if ((sequence[i][2] + sequence[i][3]) >= 5000 and (sequence[i+1][2] + sequence[i+1][3]) < 5000) or (sequence[i+1][2] < sequence[i][2]):
-#                         unflattened_sequence.append("<T>")
-
-#     return unflattened_sequence
-
 
 # Reverse the flattened function
 def unflatten(sequence, static_velocity=False):
@@ -276,106 +241,37 @@ def unflatten(sequence, static_velocity=False):
     return unflattened_sequence
 
 
-# # Skyline function for separating melody and harmony from the tokenized sequence
-# def skyline(sequence: list, diff_threshold=50, static_velocity=True, pitch_threshold=None):
-    
-#     if pitch_threshold is None:
-#         pitch_threshold = 0
-    
-#     melody = []
-#     harmony = []
-#     pointer_pitch = sequence[0][0]
-#     pointer_velocity = sequence[0][1]
-#     pointer_onset = sequence[0][2]
-#     pointer_duration = sequence[0][3]
-#     i = 0
+# Reverse the corrupted flattened function
+def unflatten_corrupted(sequence, static_velocity=False):
+    unflattened_sequence = []
+    for i in range(len(sequence)):
+        if type(sequence[i]) == str:
+            unflattened_sequence.append(sequence[i])
+            continue
+        elif type(sequence[i]) == tuple:
+            unflattened_sequence.append(sequence[i])
+        else:
+            if type(sequence[i][2]) == int:
+                note_info = ("onset", sequence[i][2])
+            else:
+                note_info = 'O'
+            unflattened_sequence.append(note_info)
+            if type(sequence[i][3]) == int:
+                note_info = ("dur", sequence[i][3])
+            else:
+                note_info = 'D'
+            unflattened_sequence.append(note_info)
+            if type(sequence[i][0]) == int:
+                if static_velocity:
+                    note_info = ("piano", sequence[i][0], 90)
+                else:
+                    note_info = ("piano", sequence[i][0], sequence[i][1])
+            else:
+                note_info = 'PVM'                
+            unflattened_sequence.append(note_info)
+            note_info = []
 
-#     for i in range(1, len(sequence)):
-#         if type(sequence[i]) != str:
-#             current_pitch = sequence[i][0]
-#             current_velocity = sequence[i][1]
-#             current_onset = sequence[i][2]
-#             current_duration = sequence[i][3]
-
-#             if type(sequence[i-1]) == str and type(sequence[i-2]) == str:
-#                 diff_curr_prev_onset = 5000
-#             elif type(sequence[i-1]) == str and type(sequence[i-2]) != str:
-#                 diff_curr_prev_onset = abs(current_onset - sequence[i-2][2])
-#             else:
-#                 diff_curr_prev_onset = abs(current_onset - sequence[i-1][2])
-            
-#             # Check if the difference between the current onset and the previous onset is greater than the threshold and the pitch is greater than the threshold
-#             if diff_curr_prev_onset > diff_threshold:
-
-#                 if pointer_pitch > pitch_threshold:
-#                     # Append the previous note
-#                     if static_velocity:
-#                         melody.append(("piano", pointer_pitch, 90))
-#                     else:
-#                         melody.append(("piano", pointer_pitch, pointer_velocity))
-#                     melody.append(("onset", pointer_onset))
-#                     melody.append(("dur", pointer_duration))
-#                 # # Append <t> based on condition
-#                 # if current_onset < pointer_onset:
-#                 #     melody.append("<T>")
-                
-#                 # Update the pointer
-#                 pointer_pitch = current_pitch
-#                 pointer_velocity = current_velocity
-#                 pointer_onset = current_onset
-#                 pointer_duration = current_duration            
-#             else:
-#                 if current_pitch > pointer_pitch:
-#                     # Append the previous note
-#                     harmony.append(("piano", pointer_pitch, pointer_velocity))
-#                     harmony.append(("onset", pointer_onset))
-#                     harmony.append(("dur", pointer_duration))
-#                     # Append <t> based on condition
-#                     if current_onset < pointer_onset:
-#                         harmony.append("<T>")
-#                     # Update the pointer
-#                     pointer_pitch = current_pitch
-#                     pointer_velocity = current_velocity
-#                     pointer_onset = current_onset
-#                     pointer_duration = current_duration
-#                 else:
-#                     # Append the previous note
-#                     harmony.append(("piano", current_pitch, current_velocity))
-#                     harmony.append(("onset", current_onset))
-#                     harmony.append(("dur", current_duration))
-#                     # Append <t> based on condition
-#                     if current_onset < pointer_onset:
-#                         harmony.append("<T>")
-#                     continue
-
-#             # Append the last note
-#             if i == len(sequence) - 1: 
-#                 if diff_curr_prev_onset > diff_threshold:
-#                     if pointer_pitch > pitch_threshold:
-#                         if static_velocity:
-#                             melody.append(("piano", pointer_pitch, 90))
-#                         else:
-#                             melody.append(("piano", pointer_pitch, pointer_velocity))
-#                         melody.append(("onset", pointer_onset))
-#                         melody.append(("dur", pointer_duration))
-#                 else:
-#                     if current_pitch > pointer_pitch:
-#                         if current_pitch > pitch_threshold:
-#                             if static_velocity:
-#                                 melody.append(("piano", current_pitch, 90))
-#                             else:
-#                                 melody.append(("piano", current_pitch, current_velocity))
-#                             melody.append(("onset", current_onset))
-#                             melody.append(("dur", current_duration))
-#                     else:
-#                         harmony.append(("piano", current_pitch, current_velocity))
-#                         harmony.append(("onset", current_onset))
-#                         harmony.append(("dur", current_duration))
-
-#         if sequence[i-1] == "<T>":
-#             melody.append("<T>")
-
-#     return melody, harmony
+    return unflattened_sequence
 
 
 # Skyline function for separating melody and harmony from the tokenized sequence

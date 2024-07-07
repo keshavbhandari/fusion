@@ -16,7 +16,7 @@ import argparse
 
 # Parse command line arguments
 parser = argparse.ArgumentParser()
-parser.add_argument("--config", type=str, default=os.path.normpath("configs/configs_os.yaml"),
+parser.add_argument("--config", type=str, default=os.path.normpath("configs/configs_style_transfer.yaml"),
                     help="Path to the config file")
 args = parser.parse_args()
 
@@ -31,7 +31,7 @@ epochs = configs['training']['fusion']['epochs']
 # Artifact folder
 artifact_folder = configs['raw_data']['artifact_folder']
 # Load encoder tokenizer json file dictionary
-tokenizer_filepath = os.path.join(artifact_folder, "fusion", "vocab.pkl")
+tokenizer_filepath = os.path.join(artifact_folder, "fusion", "vocab_corrupted.pkl")
 # Load the tokenizer dictionary
 with open(tokenizer_filepath, "rb") as f:
     tokenizer = pickle.load(f)

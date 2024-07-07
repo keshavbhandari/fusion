@@ -1,0 +1,36 @@
+
+model:
+  fusion_model:
+    encoder_max_sequence_length: 1024
+    decoder_max_sequence_length: 1024
+    encoder_num_layers: 8
+    encoder_num_heads: 8
+    encoder_hidden_size: 512
+    encoder_intermediate_size: 2048
+    decoder_num_layers: 8
+    decoder_num_heads: 8
+    decoder_hidden_size: 512
+    decoder_intermediate_size: 2048
+
+training:
+  fusion:
+    epochs: 500
+    batch_size: 64
+    learning_rate: 0.0001
+    weight_decay: 0.01
+    gradient_accumulation_steps: 1
+    run_name: style_transfer
+
+raw_data:
+  raw_data_folders: 
+    classical:
+      folder_path: /import/c4dm-datasets/maestro-v3.0.0
+      file_extension: midi
+    pop:
+      folder_path: /import/c4dm-datasets-ext/POP909
+      file_extension: mid
+    jazz:
+      folder_path: /import/c4dm-datasets/PiJAMA/data/midi
+      file_extension: midi
+  build_dataset: False
+  artifact_folder: artifacts
