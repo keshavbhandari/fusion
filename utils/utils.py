@@ -277,6 +277,24 @@ def unflatten(sequence, static_velocity=False):
 
     return unflattened_sequence
 
+def unflatten_for_aria(sequence):
+    unflattened_sequence = []
+    for i in range(len(sequence)):
+        if sequence[i] == "<T>" or sequence[i] == "<D>":
+            unflattened_sequence.append(sequence[i])
+            continue
+        elif type(sequence[i]) == tuple:
+            unflattened_sequence.append(sequence[i])
+        else:
+            note_info = ("piano", sequence[i][0], sequence[i][1])
+            unflattened_sequence.append(note_info)
+            note_info = ("onset", sequence[i][2])
+            unflattened_sequence.append(note_info)
+            note_info = ("dur", sequence[i][3])
+            unflattened_sequence.append(note_info)            
+            note_info = []
+
+    return unflattened_sequence
 
 # Reverse the corrupted flattened function
 def unflatten_corrupted(sequence, static_velocity=False):
