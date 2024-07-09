@@ -39,12 +39,16 @@ class DataCorruption:
 
         return items
 
-    def get_segment_to_corrupt(self, data: List[Union[str, List[Union[str, int]]]]) -> Tuple[List[int], List[Union[str, int]], bool]:
+    def get_segment_to_corrupt(self, data: List[Union[str, List[Union[str, int]]]], t_segment_ind = None) -> Tuple[List[int], List[Union[str, int]], bool]:
         """
         Get a random segment to corrupt from the data.
         """
         indices_to_corrupt = [n for n, i in enumerate(data) if type(i) == list]
-        random_index = random.choice(indices_to_corrupt)
+        if t_segment_ind is not None:
+            assert t_segment_ind < len(indices_to_corrupt), "t_segment_ind should be less than the number of segments in the data"
+            random_index = indices_to_corrupt[t_segment_ind]            
+        else:
+            random_index = random.choice(indices_to_corrupt)
         last_idx_flag = False if random_index < len(data) - 1 else True
 
         return indices_to_corrupt, random_index, data[random_index], last_idx_flag
@@ -164,7 +168,7 @@ class DataCorruption:
         
         return shortened_list
 
-    def apply_random_corruption(self, data: List[Union[str, List[Union[str, int]]]], context_before = 5, context_after = 1, meta_data = []) -> Dict[str, Union[List[Union[str, List[Union[str, int]]]], str, bool]]:
+    def apply_random_corruption(self, data: List[Union[str, List[Union[str, int]]]], context_before = 5, context_after = 1, meta_data = [], t_segment_ind=None) -> Dict[str, Union[List[Union[str, List[Union[str, int]]]], str, bool]]:
         """
         Apply a random corruption function to a segment of the data.
         """
@@ -182,7 +186,7 @@ class DataCorruption:
 
         corrupted_data = copy.deepcopy(data)
         corrupted_data = self.seperateitems(corrupted_data)
-        all_segment_indices, index, segment, last_idx_flag = self.get_segment_to_corrupt(corrupted_data)
+        all_segment_indices, index, segment, last_idx_flag = self.get_segment_to_corrupt(corrupted_data, t_segment_ind=t_segment_ind)
         segment_copy = copy.deepcopy(segment)
 
         corrupted_segment, corruption_type = corruption_function(segment_copy, meta_data)

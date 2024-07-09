@@ -77,7 +77,7 @@ class Fusion_Dataset(Dataset):
         # Corrupt the flattened sequence
         context_before = random.randint(1, 5)
         context_after = 1
-        output_dict = self.corruption_obj.apply_random_corruption(flattened_sequence, context_before=context_before, context_after=context_after, meta_data=meta_data)
+        output_dict = self.corruption_obj.apply_random_corruption(flattened_sequence, context_before=context_before, context_after=context_after, meta_data=meta_data, t_segment_ind=None)
         corrupted_sequence = output_dict['corrupted_sequence']
         original_segment = output_dict['original_segment']
 
@@ -103,7 +103,7 @@ class Fusion_Dataset(Dataset):
         # Add the start and end tokens
         original = ["<S>"] + original + ["<E>"]
 
-        # Tokenize the melody and harmony sequences
+        # Tokenize the sequences
         input_tokens = [self.tokenizer[tuple(token)] if isinstance(token, list) else self.tokenizer[token] for token in input_tokens]
         original = [self.tokenizer[tuple(token)] if isinstance(token, list) else self.tokenizer[token] for token in original]
 

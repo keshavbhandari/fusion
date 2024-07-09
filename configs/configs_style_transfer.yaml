@@ -14,12 +14,12 @@ model:
 
 training:
   fusion:
-    epochs: 500
+    epochs: 700
     batch_size: 64
     learning_rate: 0.0001
     weight_decay: 0.01
     gradient_accumulation_steps: 1
-    run_name: style_transfer
+    run_name: style_transfer_700_epochs
 
 raw_data:
   raw_data_folders: 

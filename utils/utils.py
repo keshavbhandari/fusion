@@ -216,6 +216,43 @@ def flatten(sequence, add_special_tokens=True):
 
     return flattened_sequence
 
+def parse_generation(sequence, add_special_tokens=True):
+    flattened_sequence = []
+    note_info = []
+    for i in range(len(sequence)):
+        if add_special_tokens:
+            if sequence[i] == "<T>" or sequence[i] == "<D>":
+                flattened_sequence.append(sequence[i])
+        if sequence[i][0] == "piano":
+            note_info.append(sequence[i][1])
+            note_info.append(sequence[i][2])
+            # Arrange the note info in the following order: [pitch, velocity, onset, duration]
+            note_info = [note_info[2], note_info[3], note_info[0], note_info[1]]
+            flattened_sequence.append(note_info) 
+            note_info = []
+        elif sequence[i][0] == "onset":
+            note_info.append(sequence[i][1])
+        elif sequence[i][0] == "dur":
+            note_info.append(sequence[i][1])
+
+    sequence = copy.deepcopy(flattened_sequence)
+    unflattened_sequence = []
+    for i in range(len(sequence)):
+        if sequence[i] == "<T>" or sequence[i] == "<D>":
+            unflattened_sequence.append(sequence[i])
+            continue
+        elif type(sequence[i]) == tuple:
+            unflattened_sequence.append(sequence[i])
+        else:
+            note_info = ("piano", sequence[i][0], sequence[i][1])
+            unflattened_sequence.append(note_info)
+            note_info = ("onset", sequence[i][2])
+            unflattened_sequence.append(note_info)
+            note_info = ("dur", sequence[i][3])
+            unflattened_sequence.append(note_info)            
+            note_info = []
+
+    return unflattened_sequence
 
 # Reverse the flattened function
 def unflatten(sequence, static_velocity=False):
