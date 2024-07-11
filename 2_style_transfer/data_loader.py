@@ -77,7 +77,13 @@ class Fusion_Dataset(Dataset):
         # Corrupt the flattened sequence
         context_before = random.randint(1, 5)
         context_after = 1
-        output_dict = self.corruption_obj.apply_random_corruption(flattened_sequence, context_before=context_before, context_after=context_after, meta_data=meta_data, t_segment_ind=None)
+        output_dict = self.corruption_obj.apply_random_corruption(flattened_sequence, 
+                                                                  context_before=context_before, 
+                                                                  context_after=context_after, 
+                                                                  meta_data=meta_data, 
+                                                                  t_segment_ind=None,
+                                                                  inference=False,
+                                                                  corruption_type=None)
         corrupted_sequence = output_dict['corrupted_sequence']
         original_segment = output_dict['original_segment']
 

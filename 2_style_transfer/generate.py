@@ -6,6 +6,7 @@ import random
 import numpy as np
 import sys
 import argparse
+from tqdm import tqdm
 import torch
 from torch.nn import functional as F
 from transformers import EncoderDecoderModel
@@ -95,24 +96,48 @@ def refine_sequence(corrupted_sequence, tokenizer, model, encoder_max_sequence_l
 
 
 
-convert_to = "jazz"
-file_path = os.path.join("/import/c4dm-datasets/maestro-v3.0.0/2008/MIDI-Unprocessed_07_R2_2008_01-05_ORIG_MID--AUDIO_07_R2_2008_wav--2.midi")
+convert_from = "classical"
+convert_to = "classical"
+
+# Open JSON file
+with open(os.path.join(artifact_folder, "fusion", "valid_file_list.json"), "r") as f:
+    valid_sequences = json.load(f)
+
+# Choose a random key whose value is classical from the valid sequences as file_path
+valid_file_paths = [key for key, value in valid_sequences.items() if value == convert_from]
+file_path = random.choice(valid_file_paths)
+# file_path = os.path.join("/homes/kb658/fusion/input/pass_1_generated_Things Ain't What They Used To Be - Live At Maybeck Recital Hall, Berkeley, CA  January 20, 1991.midi")
+file_path = "/homes/kb658/fusion/input/debussy-clair-de-lune.mid"
+print("File path:", file_path)
 mid = MidiDict.from_midi(file_path)
 aria_tokenizer = AbsTokenizer()
 tokenized_sequence = aria_tokenizer.tokenize(mid)
+# Save the original MIDI file
+filename = os.path.basename(file_path)
+mid_dict = aria_tokenizer.detokenize(tokenized_sequence)
+mid = mid_dict.to_midi()
+mid.save(os.path.join(output_folder, "original_" + filename))
+
+# Get the instrument token
 instrument_token = tokenized_sequence[0]
 tokenized_sequence = tokenized_sequence[2:-1]
 
 # Flatten the tokenized sequence
 tokenized_sequence = flatten(tokenized_sequence, add_special_tokens=True)
 corruption_obj = DataCorruption()
-output_dict = corruption_obj.apply_random_corruption(tokenized_sequence, context_before=5, context_after=1, meta_data=[convert_to], t_segment_ind=2, inference=True)
+output_dict = corruption_obj.apply_random_corruption(tokenized_sequence, context_before=5, context_after=1, meta_data=[convert_to], t_segment_ind=2, inference=True, corruption_type=None)
 separated_sequence = output_dict['separated_sequence']
 all_segment_indices = output_dict['all_segment_indices']
 
 t_segment_ind = 2
-while t_segment_ind < len(all_segment_indices):
-    output_dict = corruption_obj.apply_random_corruption(tokenized_sequence, context_before=5, context_after=1, meta_data=[convert_to], t_segment_ind=t_segment_ind, inference=True)
+n_iterations = len(all_segment_indices) - 1
+# Initialize tqdm
+progress_bar = tqdm(total=n_iterations)
+jump_every = 1
+
+while t_segment_ind < n_iterations:
+    output_dict = corruption_obj.apply_random_corruption(tokenized_sequence, context_before=5, context_after=1, meta_data=[convert_to], t_segment_ind=t_segment_ind, inference=True, corruption_type='incorrect_transposition')
+    corruption_type = output_dict['corruption_type']
     index = output_dict['index']
     corrupted_sequence = output_dict['corrupted_sequence']
     corrupted_sequence = unflatten_corrupted(corrupted_sequence)
@@ -120,16 +145,18 @@ while t_segment_ind < len(all_segment_indices):
     flattened_refined_segment = flatten(refined_segment, add_special_tokens=True)
     separated_sequence[index] = flattened_refined_segment
     tokenized_sequence = corruption_obj.concatenate_list(separated_sequence)
-    t_segment_ind += 1
+    t_segment_ind += jump_every
+    # Update the progress bar
+    progress_bar.update(jump_every)
     
-    # Print the generated sequences
-    print("Generated sequences:", flattened_refined_segment)
+    print("Corruption type:", corruption_type)
 
 generated_sequence = unflatten_for_aria(tokenized_sequence)
 
 # Write the generated sequences to a MIDI file
-generated_sequence = [instrument_token, "<S>"] + generated_sequence + ["<E>"]
+generated_sequence = [('prefix', 'instrument', 'piano'), "<S>"] + generated_sequence + ["<E>"]
 mid_dict = aria_tokenizer.detokenize(generated_sequence)
 mid = mid_dict.to_midi()
 filename = os.path.basename(file_path)
-mid.save(os.path.join(output_folder, filename))
+print(generated_sequence)
+mid.save(os.path.join(output_folder, "pass_1_generated_" + filename))

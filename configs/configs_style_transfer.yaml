@@ -21,16 +21,23 @@ training:
     gradient_accumulation_steps: 1
     run_name: style_transfer_700_epochs
 
+generation:
+  convert_from: classical
+  convert_to: jazz
+  pass_1:
+    corruption_rate: 0.5
+    corruption_type: onset_duration_mask
+  pass_2:
+    corruption_rate: 0.3
+    corruption_type: random
+
 raw_data:
   raw_data_folders: 
     classical:
       folder_path: /import/c4dm-datasets/maestro-v3.0.0
-      file_extension: midi
     pop:
       folder_path: /import/c4dm-datasets-ext/POP909
-      file_extension: mid
     jazz:
       folder_path: /import/c4dm-datasets/PiJAMA/data/midi
-      file_extension: midi
   build_dataset: False
   artifact_folder: artifacts

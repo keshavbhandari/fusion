@@ -5,3 +5,6 @@ __pycache__/
 
 # Ignore the artifacts fusion directory
 artifacts/fusion/
+
+output/
+input/

@@ -149,7 +149,7 @@ class DataCorruption:
 
         return ['incorrect_transposition'] + meta_data + data, 'incorrect_transposition'
 
-    def shorten_list(self, lst, index, segment_indices, context_before, context_after):
+    def shorten_list(self, lst, index, segment_indices, context_before, context_after, inference=False):
         # Ensure the list is not empty and the index is within bounds
         if not lst or index < 0 or index >= len(lst):
             raise ValueError("List is empty or index is out of bounds")
@@ -161,7 +161,7 @@ class DataCorruption:
         start_index = max(segment_index - context_before, 0)
         end_index = min(segment_index + context_after, len(segment_indices)-1)
         actual_start_index = segment_indices[start_index]
-        if random.uniform(0, 1) < 0.5 and index != 0:
+        if random.uniform(0, 1) < 0.5 and index != 0 and not inference:
             actual_end_index = segment_indices[end_index] # no context after the corrupted segment
         else:
             actual_end_index = segment_indices[end_index] + 1 # context_after + 1 to include the next single item
@@ -187,21 +187,24 @@ class DataCorruption:
     def apply_random_corruption(self, data: List[Union[str, List[Union[str, int]]]], 
                                 context_before: int = 5, context_after: int = 1, 
                                 meta_data: List = [], t_segment_ind: int = None,
-                                inference: bool = False) -> Dict:
+                                inference: bool = False, corruption_type: str = None) -> Dict:
         """
         Apply a random corruption function to a segment of the data.
         """
 
-        corruption_functions = [
-            self.pitch_velocity_mask,
-            self.onset_duration_mask,
-            self.general_mask,
-            self.permute_pitches,
-            self.permute_pitch_velocity,
-            self.fragmentation,
-            self.incorrect_transposition
-        ]
-        corruption_function = random.choice(corruption_functions)
+        corruption_functions = {
+            'pitch_velocity_mask': self.pitch_velocity_mask,
+            'onset_duration_mask': self.onset_duration_mask,
+            'general_mask': self.general_mask,
+            'permute_pitches': self.permute_pitches,
+            'permute_pitch_velocity': self.permute_pitch_velocity,
+            'fragmentation': self.fragmentation,
+            'incorrect_transposition': self.incorrect_transposition
+        }
+        if corruption_type is not None and corruption_type != 'random':
+            corruption_function = corruption_functions[corruption_type]
+        else:
+            corruption_function = random.choice(list(corruption_functions.values()))
 
         data_copy = copy.deepcopy(data)
         separated_sequence = self.seperateitems(data_copy)
@@ -214,7 +217,7 @@ class DataCorruption:
         corruption_data[index] = corrupted_segment
 
         # Modify corrupted_data to shorten context before and after the corrupted segment
-        shortened_corrupted_data = self.shorten_list(corruption_data, index, all_segment_indices, context_before=context_before, context_after=context_after)
+        shortened_corrupted_data = self.shorten_list(corruption_data, index, all_segment_indices, context_before=context_before, context_after=context_after, inference=inference)
 
         corrupted_data_sequence = self.concatenate_list(shortened_corrupted_data)
 

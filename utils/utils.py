@@ -218,22 +218,23 @@ def flatten(sequence, add_special_tokens=True):
 
 def parse_generation(sequence, add_special_tokens=True):
     flattened_sequence = []
-    note_info = []
+    note_info = {}
     for i in range(len(sequence)):
         if add_special_tokens:
             if sequence[i] == "<T>" or sequence[i] == "<D>":
                 flattened_sequence.append(sequence[i])
         if sequence[i][0] == "piano":
-            note_info.append(sequence[i][1])
-            note_info.append(sequence[i][2])
+            note_info['pitch'] = sequence[i][1]
+            note_info['velocity'] = sequence[i][2]
             # Arrange the note info in the following order: [pitch, velocity, onset, duration]
-            note_info = [note_info[2], note_info[3], note_info[0], note_info[1]]
-            flattened_sequence.append(note_info) 
-            note_info = []
+            if len(note_info) == 4:
+                note_info = [note_info['pitch'], note_info['velocity'], note_info['onset'], note_info['duration']]
+                flattened_sequence.append(note_info) 
+                note_info = {}
         elif sequence[i][0] == "onset":
-            note_info.append(sequence[i][1])
+            note_info['onset'] = sequence[i][1]
         elif sequence[i][0] == "dur":
-            note_info.append(sequence[i][1])
+            note_info['duration'] = sequence[i][1]
 
     sequence = copy.deepcopy(flattened_sequence)
     unflattened_sequence = []
