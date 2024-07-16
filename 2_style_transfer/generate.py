@@ -38,10 +38,6 @@ output_folder = os.path.join("/homes/kb658/fusion/output")
 if not os.path.exists(output_folder):
     os.makedirs(output_folder)
 
-# Get the encoder and decoder max sequence length
-encoder_max_sequence_length = configs['model']['fusion_model']['encoder_max_sequence_length']
-decoder_max_sequence_length = configs['model']['fusion_model']['decoder_max_sequence_length']
-
 # Get tokenizer
 tokenizer_filepath = os.path.join(artifact_folder, "fusion", "vocab_corrupted.pkl")
 # Load the tokenizer dictionary
@@ -95,16 +91,57 @@ def refine_sequence(corrupted_sequence, tokenizer, model, encoder_max_sequence_l
     return generated_sequences
 
 
+def generate_one_pass(tokenized_sequence, fusion_model, configs, corruption_type, corruption_rate):
+    
+    # Get the convert_to genre
+    convert_to = configs['generation']['convert_to']
 
-convert_from = "classical"
-convert_to = "classical"
+    # Get the encoder and decoder max sequence length
+    encoder_max_sequence_length = configs['model']['fusion_model']['encoder_max_sequence_length']
+    decoder_max_sequence_length = configs['model']['fusion_model']['decoder_max_sequence_length']
+    
+    
+    corruption_obj = DataCorruption()
+    separated_sequence = corruption_obj.seperateitems(tokenized_sequence)
+    all_segment_indices, index, _, _ = corruption_obj.get_segment_to_corrupt(separated_sequence, t_segment_ind=2)
+
+    t_segment_ind = 2
+    n_iterations = len(all_segment_indices) - 1
+    # Initialize tqdm
+    progress_bar = tqdm(total=n_iterations)
+    jump_every = 1
+
+    while t_segment_ind < n_iterations:
+
+        if random.random() < corruption_rate:
+            output_dict = corruption_obj.apply_random_corruption(tokenized_sequence, context_before=5, context_after=1, meta_data=[convert_to], t_segment_ind=t_segment_ind, inference=True, corruption_type=corruption_type)
+            corruption_type = output_dict['corruption_type']
+            index = output_dict['index']
+            corrupted_sequence = output_dict['corrupted_sequence']
+            corrupted_sequence = unflatten_corrupted(corrupted_sequence)
+            refined_segment = refine_sequence(corrupted_sequence, tokenizer, fusion_model, encoder_max_sequence_length, decoder_max_sequence_length)
+            flattened_refined_segment = flatten(refined_segment, add_special_tokens=True)
+            separated_sequence[index] = flattened_refined_segment
+            tokenized_sequence = corruption_obj.concatenate_list(separated_sequence)
+            print("Corrupted t_segment_ind:", t_segment_ind, "Corruption type:", corruption_type)
+        
+        t_segment_ind += jump_every
+        # Update the progress bar
+        progress_bar.update(jump_every)
+
+    progress_bar.close()
+
+    return tokenized_sequence
+
+
+
 
 # Open JSON file
 with open(os.path.join(artifact_folder, "fusion", "valid_file_list.json"), "r") as f:
     valid_sequences = json.load(f)
 
 # Choose a random key whose value is classical from the valid sequences as file_path
-valid_file_paths = [key for key, value in valid_sequences.items() if value == convert_from]
+valid_file_paths = [key for key, value in valid_sequences.items() if value == configs['generation']['convert_from']]
 file_path = random.choice(valid_file_paths)
 # file_path = os.path.join("/homes/kb658/fusion/input/pass_1_generated_Things Ain't What They Used To Be - Live At Maybeck Recital Hall, Berkeley, CA  January 20, 1991.midi")
 file_path = "/homes/kb658/fusion/input/debussy-clair-de-lune.mid"
@@ -124,37 +161,20 @@ tokenized_sequence = tokenized_sequence[2:-1]
 
 # Flatten the tokenized sequence
 tokenized_sequence = flatten(tokenized_sequence, add_special_tokens=True)
-corruption_obj = DataCorruption()
-output_dict = corruption_obj.apply_random_corruption(tokenized_sequence, context_before=5, context_after=1, meta_data=[convert_to], t_segment_ind=2, inference=True, corruption_type=None)
-separated_sequence = output_dict['separated_sequence']
-all_segment_indices = output_dict['all_segment_indices']
 
-t_segment_ind = 2
-n_iterations = len(all_segment_indices) - 1
-# Initialize tqdm
-progress_bar = tqdm(total=n_iterations)
-jump_every = 1
+passes = len(configs['generation']['passes'].keys())
+for i in range(passes):
+    print("Pass:", i + 1)
+    corruption_type = configs['generation']['passes']['pass_' + str(i + 1)]['corruption_type']
+    corruption_rate = configs['generation']['passes']['pass_' + str(i + 1)]['corruption_rate']
+    # Generate the sequence
+    tokenized_sequence = generate_one_pass(tokenized_sequence, fusion_model, configs, corruption_type, corruption_rate)
 
-while t_segment_ind < n_iterations:
-    output_dict = corruption_obj.apply_random_corruption(tokenized_sequence, context_before=5, context_after=1, meta_data=[convert_to], t_segment_ind=t_segment_ind, inference=True, corruption_type='incorrect_transposition')
-    corruption_type = output_dict['corruption_type']
-    index = output_dict['index']
-    corrupted_sequence = output_dict['corrupted_sequence']
-    corrupted_sequence = unflatten_corrupted(corrupted_sequence)
-    refined_segment = refine_sequence(corrupted_sequence, tokenizer, fusion_model, encoder_max_sequence_length, decoder_max_sequence_length)
-    flattened_refined_segment = flatten(refined_segment, add_special_tokens=True)
-    separated_sequence[index] = flattened_refined_segment
-    tokenized_sequence = corruption_obj.concatenate_list(separated_sequence)
-    t_segment_ind += jump_every
-    # Update the progress bar
-    progress_bar.update(jump_every)
-    
-    print("Corruption type:", corruption_type)
-
-generated_sequence = unflatten_for_aria(tokenized_sequence)
+# Unflatten the tokenized sequence
+tokenized_sequence = unflatten_for_aria(tokenized_sequence)
 
 # Write the generated sequences to a MIDI file
-generated_sequence = [('prefix', 'instrument', 'piano'), "<S>"] + generated_sequence + ["<E>"]
+generated_sequence = [('prefix', 'instrument', 'piano'), "<S>"] + tokenized_sequence + ["<E>"]
 mid_dict = aria_tokenizer.detokenize(generated_sequence)
 mid = mid_dict.to_midi()
 filename = os.path.basename(file_path)
