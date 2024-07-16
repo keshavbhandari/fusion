@@ -73,7 +73,7 @@ class DataCorruption:
 
         return ['onset_duration_mask'] + meta_data + data, 'onset_duration_mask'
 
-    def general_mask(self, data: List[Union[str, List[Union[str, int]]]], meta_data: List, **kwargs) -> Tuple[List[Union[str, List[Union[str, int]]]], str]:
+    def whole_mask(self, data: List[Union[str, List[Union[str, int]]]], meta_data: List, **kwargs) -> Tuple[List[Union[str, List[Union[str, int]]]], str]:
         """
         Apply a general mask to the data segment.
         """
@@ -195,7 +195,7 @@ class DataCorruption:
         corruption_functions = {
             'pitch_velocity_mask': self.pitch_velocity_mask,
             'onset_duration_mask': self.onset_duration_mask,
-            'general_mask': self.general_mask,
+            'whole_mask': self.whole_mask,
             'permute_pitches': self.permute_pitches,
             'permute_pitch_velocity': self.permute_pitch_velocity,
             'fragmentation': self.fragmentation,

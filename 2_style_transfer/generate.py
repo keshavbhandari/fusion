@@ -115,7 +115,6 @@ def generate_one_pass(tokenized_sequence, fusion_model, configs, corruption_type
 
         if random.random() < corruption_rate:
             output_dict = corruption_obj.apply_random_corruption(tokenized_sequence, context_before=5, context_after=1, meta_data=[convert_to], t_segment_ind=t_segment_ind, inference=True, corruption_type=corruption_type)
-            corruption_type = output_dict['corruption_type']
             index = output_dict['index']
             corrupted_sequence = output_dict['corrupted_sequence']
             corrupted_sequence = unflatten_corrupted(corrupted_sequence)
@@ -123,7 +122,7 @@ def generate_one_pass(tokenized_sequence, fusion_model, configs, corruption_type
             flattened_refined_segment = flatten(refined_segment, add_special_tokens=True)
             separated_sequence[index] = flattened_refined_segment
             tokenized_sequence = corruption_obj.concatenate_list(separated_sequence)
-            print("Corrupted t_segment_ind:", t_segment_ind, "Corruption type:", corruption_type)
+            print("Corrupted t_segment_ind:", t_segment_ind, "Corruption type:", output_dict['corruption_type'])
         
         t_segment_ind += jump_every
         # Update the progress bar
@@ -179,4 +178,4 @@ mid_dict = aria_tokenizer.detokenize(generated_sequence)
 mid = mid_dict.to_midi()
 filename = os.path.basename(file_path)
 print(generated_sequence)
-mid.save(os.path.join(output_folder, "pass_1_generated_" + filename))
+mid.save(os.path.join(output_folder, f"pass_{passes}_generated_" + filename))
