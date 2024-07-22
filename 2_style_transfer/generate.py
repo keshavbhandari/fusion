@@ -7,6 +7,7 @@ import numpy as np
 import sys
 import argparse
 from tqdm import tqdm
+import pretty_midi
 import torch
 from torch.nn import functional as F
 from transformers import EncoderDecoderModel
@@ -18,7 +19,7 @@ from corruptions import DataCorruption
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(os.path.dirname(SCRIPT_DIR))
-from utils.utils import flatten, unflatten, unflatten_corrupted, parse_generation, unflatten_for_aria
+from utils.utils import flatten, unflatten, unflatten_corrupted, parse_generation, unflatten_for_aria, Segment_Novelty
 
 # Parse command line arguments
 parser = argparse.ArgumentParser()
@@ -56,7 +57,8 @@ print("Fusion model loaded")
 
 def refine_sequence(corrupted_sequence, tokenizer, model, encoder_max_sequence_length, decoder_max_sequence_length):
     # Tokenize the sequence
-    input_tokens = [tokenizer[tuple(token)] if isinstance(token, list) else tokenizer[token] for token in corrupted_sequence]
+    # input_tokens = [tokenizer[tuple(token)] if isinstance(token, list) else tokenizer[token] for token in corrupted_sequence]
+    input_tokens = [tokenizer[token] for token in corrupted_sequence if token in tokenizer.keys()]
     # Pad the sequences
     if len(input_tokens) < encoder_max_sequence_length:
         input_tokens = F.pad(torch.tensor(input_tokens), (0, encoder_max_sequence_length - len(input_tokens))).to(torch.int64)
@@ -103,7 +105,9 @@ def generate_one_pass(tokenized_sequence, fusion_model, configs, corruption_type
     
     corruption_obj = DataCorruption()
     separated_sequence = corruption_obj.seperateitems(tokenized_sequence)
-    all_segment_indices, index, _, _ = corruption_obj.get_segment_to_corrupt(separated_sequence, t_segment_ind=2)
+    # Get the indices of the novelty tokens
+    novelty_segments = [n for n, i in enumerate(separated_sequence) if '<N>' in i] + [n+1 for n, i in enumerate(separated_sequence) if '<n>' in i]
+    all_segment_indices, _, _, _ = corruption_obj.get_segment_to_corrupt(separated_sequence, t_segment_ind=2, exclude_idx=novelty_segments)
 
     t_segment_ind = 2
     n_iterations = len(all_segment_indices) - 1
@@ -132,8 +136,39 @@ def generate_one_pass(tokenized_sequence, fusion_model, configs, corruption_type
 
     return tokenized_sequence
 
+def get_midi_notes_from_tick(midi_dict, midi_data, peak_times):
+    novel_note_numbers = []
+    novel_notes = []
+    for n, note in enumerate(midi_dict.note_msgs):
+        if len(peak_times) > 0:
+            tick = note['tick']
+            # tick_to_time
+            time_in_sec = pretty_midi.PrettyMIDI.tick_to_time(midi_data, tick)
 
+            if time_in_sec > peak_times[0]:
+                print(f"Note {n} is at {time_in_sec} seconds")
+                novel_note_numbers.append(n)
+                novel_notes.append(note)
+                peak_times = np.delete(peak_times, 0)
+        else:
+            return novel_note_numbers, novel_notes
 
+def add_novelty_segment_token(tokenized_sequence, novel_note_numbers):
+    note_number = 0
+    insertion_points = []
+    for note_idx, note in enumerate(tokenized_sequence):
+        if type(note) == list:
+            if note_number in novel_note_numbers:
+                insertion_points.append(note_idx)
+            note_number += 1
+    
+    new_tokenized_sequence = []
+    for idx, token in enumerate(tokenized_sequence):
+        if idx in insertion_points:
+            new_tokenized_sequence.append("<N>")
+        new_tokenized_sequence.append(token)
+    
+    return new_tokenized_sequence
 
 # Open JSON file
 with open(os.path.join(artifact_folder, "fusion", "valid_file_list.json"), "r") as f:
@@ -148,19 +183,32 @@ print("File path:", file_path)
 mid = MidiDict.from_midi(file_path)
 aria_tokenizer = AbsTokenizer()
 tokenized_sequence = aria_tokenizer.tokenize(mid)
-# Save the original MIDI file
-filename = os.path.basename(file_path)
-mid_dict = aria_tokenizer.detokenize(tokenized_sequence)
-mid = mid_dict.to_midi()
-mid.save(os.path.join(output_folder, "original_" + filename))
+
+# # Save the original MIDI file
+# filename = os.path.basename(file_path)
+# mid_dict = aria_tokenizer.detokenize(tokenized_sequence)
+# original_mid = mid_dict.to_midi()
+# original_mid.save(os.path.join(output_folder, "original_" + filename))
 
 # Get the instrument token
 instrument_token = tokenized_sequence[0]
 tokenized_sequence = tokenized_sequence[2:-1]
 
+# Novelty based segmentation
+audio_file = "/homes/kb658/fusion/input/debussy-clair-de-lune_original.wav"
+config_file = "/homes/kb658/fusion/configs/config_ssm.yaml"
+segment_novelty = Segment_Novelty(config_file, audio_file)
+peak_times = segment_novelty.get_peak_timestamps(audio_file, 5)
+pretty_midi_data = pretty_midi.PrettyMIDI(file_path)
+novel_note_numbers, novel_notes = get_midi_notes_from_tick(mid, pretty_midi_data, peak_times)
+
 # Flatten the tokenized sequence
 tokenized_sequence = flatten(tokenized_sequence, add_special_tokens=True)
 
+# Add novelty segment token to the tokenized sequence
+tokenized_sequence = add_novelty_segment_token(tokenized_sequence, novel_note_numbers)
+
+# Generate by iterating with multiple passes
 passes = len(configs['generation']['passes'].keys())
 for i in range(passes):
     print("Pass:", i + 1)
@@ -175,7 +223,6 @@ tokenized_sequence = unflatten_for_aria(tokenized_sequence)
 # Write the generated sequences to a MIDI file
 generated_sequence = [('prefix', 'instrument', 'piano'), "<S>"] + tokenized_sequence + ["<E>"]
 mid_dict = aria_tokenizer.detokenize(generated_sequence)
-mid = mid_dict.to_midi()
+generated_mid = mid_dict.to_midi()
 filename = os.path.basename(file_path)
-print(generated_sequence)
-mid.save(os.path.join(output_folder, f"pass_{passes}_generated_" + filename))
+generated_mid.save(os.path.join(output_folder, f"pass_{passes}_generated_" + filename))

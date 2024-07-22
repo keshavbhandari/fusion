@@ -18,7 +18,7 @@ class DataCorruption:
         data = ast.literal_eval(corruptions_string)
         return data
 
-    def seperateitems(self, data: List[Union[str, List[Union[str, int]]]]) -> List[Union[str, List[Union[str, int]]]]:
+    def seperateitems(self, data: List) -> List[Union[str, List[Union[str, int]]]]:
         """
         Split the list so all items between a set of <T> tokens are individual.
         """
@@ -39,11 +39,11 @@ class DataCorruption:
 
         return items
 
-    def get_segment_to_corrupt(self, data: List[Union[str, List[Union[str, int]]]], t_segment_ind = None) -> Tuple[List[int], List[Union[str, int]], bool]:
+    def get_segment_to_corrupt(self, data: List, t_segment_ind = None, exclude_idx = []) -> Tuple[List[int], List[Union[str, int]], bool]:
         """
         Get a random segment to corrupt from the data.
         """
-        indices_to_corrupt = [n for n, i in enumerate(data) if type(i) == list]
+        indices_to_corrupt = [n for n, i in enumerate(data) if type(i) == list and n not in exclude_idx]
         if t_segment_ind is not None:
             assert t_segment_ind < len(indices_to_corrupt), "t_segment_ind should be less than the number of segments in the data"
             random_index = indices_to_corrupt[t_segment_ind]            
@@ -53,7 +53,7 @@ class DataCorruption:
 
         return indices_to_corrupt, random_index, data[random_index], last_idx_flag
 
-    def pitch_velocity_mask(self, data: List[Union[str, List[Union[str, int]]]], meta_data: List, **kwargs) -> Tuple[List[Union[str, List[Union[str, int]]]], str]:
+    def pitch_velocity_mask(self, data: List, meta_data: List, **kwargs) -> Tuple[List[Union[str, List[Union[str, int]]]], str]:
         """
         Apply pitch and velocity mask to the data segment.
         """
@@ -63,7 +63,7 @@ class DataCorruption:
 
         return ['pitch_velocity_mask'] + meta_data + data, 'pitch_velocity_mask'
 
-    def onset_duration_mask(self, data: List[Union[str, List[Union[str, int]]]], meta_data: List, **kwargs) -> Tuple[List[Union[str, List[Union[str, int]]]], str]:
+    def onset_duration_mask(self, data: List, meta_data: List, **kwargs) -> Tuple[List[Union[str, List[Union[str, int]]]], str]:
         """
         Apply onset and duration mask to the data segment.
         """
@@ -73,7 +73,7 @@ class DataCorruption:
 
         return ['onset_duration_mask'] + meta_data + data, 'onset_duration_mask'
 
-    def whole_mask(self, data: List[Union[str, List[Union[str, int]]]], meta_data: List, **kwargs) -> Tuple[List[Union[str, List[Union[str, int]]]], str]:
+    def whole_mask(self, data: List, meta_data: List, **kwargs) -> Tuple[List[Union[str, List[Union[str, int]]]], str]:
         """
         Apply a general mask to the data segment.
         """
@@ -82,7 +82,7 @@ class DataCorruption:
 
         return ['whole_mask'] + meta_data + output, 'whole_mask'
 
-    def permute_pitches(self, data: List[Union[str, List[Union[str, int]]]], meta_data: List, **kwargs) -> Tuple[List[Union[str, List[Union[str, int]]]], str]:
+    def permute_pitches(self, data: List, meta_data: List, **kwargs) -> Tuple[List[Union[str, List[Union[str, int]]]], str]:
         """
         Permute the pitches in the data segment.
         """
@@ -96,7 +96,7 @@ class DataCorruption:
 
         return ['pitch_permutation'] + meta_data + data, 'pitch_permutation'
 
-    def permute_pitch_velocity(self, data: List[Union[str, List[Union[str, int]]]], meta_data: List, **kwargs) -> Tuple[List[Union[str, List[Union[str, int]]]], str]:
+    def permute_pitch_velocity(self, data: List, meta_data: List, **kwargs) -> Tuple[List[Union[str, List[Union[str, int]]]], str]:
         """
         Permute the pitches and velocities in the data segment.
         """
@@ -114,7 +114,7 @@ class DataCorruption:
 
         return ['pitch_velocity_permutation'] + meta_data + data, 'pitch_velocity_permutation'
 
-    def fragmentation(self, data: List[Union[str, List[Union[str, int]]]], meta_data: List, **kwargs) -> Tuple[List[Union[str, List[Union[str, int]]]], str]:
+    def fragmentation(self, data: List, meta_data: List, **kwargs) -> Tuple[List[Union[str, List[Union[str, int]]]], str]:
         """
         Fragment the data segment.
         """
@@ -133,7 +133,7 @@ class DataCorruption:
 
         return ['fragmentation'] + meta_data + fragmented_data, 'fragmentation'
     
-    def incorrect_transposition(self, data: List[Union[str, List[Union[str, int]]]], meta_data: List, **kwargs) -> Tuple[List[Union[str, List[Union[str, int]]]], str]:
+    def incorrect_transposition(self, data: List, meta_data: List, **kwargs) -> Tuple[List[Union[str, List[Union[str, int]]]], str]:
         """
         Transpose the pitches in the data segment by a random value.
         """
@@ -184,7 +184,7 @@ class DataCorruption:
                 concatenated_list.append(element)
         return concatenated_list
 
-    def apply_random_corruption(self, data: List[Union[str, List[Union[str, int]]]], 
+    def apply_random_corruption(self, data: List, 
                                 context_before: int = 5, context_after: int = 1, 
                                 meta_data: List = [], t_segment_ind: int = None,
                                 inference: bool = False, corruption_type: str = None) -> Dict:
@@ -209,7 +209,7 @@ class DataCorruption:
         data_copy = copy.deepcopy(data)
         separated_sequence = self.seperateitems(data_copy)
         corruption_data = copy.deepcopy(separated_sequence)
-        all_segment_indices, index, segment, last_idx_flag = self.get_segment_to_corrupt(corruption_data, t_segment_ind=t_segment_ind)
+        all_segment_indices, index, segment, last_idx_flag = self.get_segment_to_corrupt(corruption_data, t_segment_ind=t_segment_ind, exclude_idx=[])
         segment_copy = copy.deepcopy(segment)
 
         corrupted_segment, corruption_type = corruption_function(segment_copy, meta_data, inference=inference)

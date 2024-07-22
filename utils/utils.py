@@ -6,6 +6,8 @@ import numpy as np
 import miditoolkit
 from music21 import stream, meter, note, metadata, tempo, converter, instrument, chord, key
 import pandas as pd
+import yaml
+from ssmnet.core import SsmNetDeploy
 
 def find_beats_in_bar(time_signature):
     if time_signature == "null" or time_signature is None:
@@ -281,7 +283,7 @@ def unflatten(sequence, static_velocity=False):
 def unflatten_for_aria(sequence):
     unflattened_sequence = []
     for i in range(len(sequence)):
-        if sequence[i] == "<T>" or sequence[i] == "<D>":
+        if type(sequence[i]) == str:
             unflattened_sequence.append(sequence[i])
             continue
         elif type(sequence[i]) == tuple:
@@ -328,6 +330,54 @@ def unflatten_corrupted(sequence, static_velocity=False):
             note_info = []
 
     return unflattened_sequence
+
+
+class Segment_Novelty:
+    def __init__(self, config_file, audio_file):
+        
+        with open(config_file, "r", encoding="utf-8") as fid:
+            config_d = yaml.safe_load(fid)
+
+        self.ssmnet = SsmNetDeploy(config_d)
+        self.audio_file = audio_file
+
+    def m_get_features(self, audio_file):
+        return self.ssmnet.m_get_features(audio_file)
+
+    def m_get_ssm_novelty(self, feat_3m):
+        return self.ssmnet.m_get_ssm_novelty(feat_3m)
+
+    def m_get_boundaries(self, hat_novelty_np, time_sec_v):
+        return self.ssmnet.m_get_boundaries(hat_novelty_np, time_sec_v)
+
+    def m_plot(self, hat_ssm_np, hat_novelty_np, hat_boundary_frame_v, output_pdf_file):
+        return self.ssmnet.m_plot(hat_ssm_np, hat_novelty_np, hat_boundary_frame_v, output_pdf_file)
+
+    def m_export_csv(self, hat_boundary_sec_v, output_csv_file):
+        return self.ssmnet.m_export_csv(hat_boundary_sec_v, output_csv_file)
+    
+    def max_items(self, values, indices, n):
+        sorted_items = np.argsort(values)[::-1]
+        top_items = sorted_items[:n]
+        return indices[top_items]
+    
+    def find_novelty_timestamps(self, top_peak_indices, timestampsarray):
+        return timestampsarray[top_peak_indices]
+    
+    def locate_peak_timestamps(self, indices, values, n_peaks):
+        top_novelty_indices = self.max_items(values, indices, n_peaks)
+        _, time_sec_v = self.m_get_features(self.audio_file)
+        timestamps = self.find_novelty_timestamps(top_novelty_indices, time_sec_v)
+        sorted_timestamps = np.sort(timestamps)
+        return sorted_timestamps
+
+    def get_peak_timestamps(self, audio_file, n_peaks):
+        feat_3m, time_sec_v = self.m_get_features(audio_file)
+        _, hat_novelty_np = self.m_get_ssm_novelty(feat_3m)
+        _, hat_boundary_frame_v = self.m_get_boundaries(hat_novelty_np, time_sec_v)
+        all_novelty_values = hat_novelty_np[hat_boundary_frame_v]
+        return self.locate_peak_timestamps(hat_boundary_frame_v, all_novelty_values, n_peaks)
+
 
 
 # Skyline function for separating melody and harmony from the tokenized sequence

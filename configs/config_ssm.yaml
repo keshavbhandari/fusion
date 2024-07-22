@@ -1,0 +1,21 @@
+features:
+  step_target_sec: 0.1
+  patch_halfduration_frame: 20 # --- cannot change !!! otherwise we need to change the network architecture
+  patch_hop_frame: 5 # 2, 10
+model:
+  do_kernel_freeze: false
+  do_kernel_init_checkerboard: true
+  #do_nb_attention: 1
+  do_nb_attention: 3
+  do_sub_avg: false
+  kernel_Ldemi_sec: 10
+  kernel_nb: 3
+  kernel_sigma_sec: 5
+  n_out: 32
+  #file: 'nbatt1_0411-132051_9_epoch=11-step=1200.ckpt' # --- do_nb_attention=1
+  file: 'nbatt3_0411-132051_25_epoch=6-step=700.ckpt' # --- do_nb_attention=3
+postprocessing:
+  peak_mean_Ldemi_sec: 10
+  peak_distance_sec: 7
+  peak_threshold: 1.35
+  measure_trim_borders: False

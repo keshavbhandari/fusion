@@ -29,7 +29,10 @@ generation:
       corruption_rate: 0.5
       corruption_type: onset_duration_mask
     pass_2:
-      corruption_rate: 0.3
+      corruption_rate: 1.0
+      corruption_type: incorrect_transposition
+    pass_3:
+      corruption_rate: 0.5
       corruption_type: random
 
 raw_data:
