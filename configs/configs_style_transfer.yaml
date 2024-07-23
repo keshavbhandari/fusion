@@ -24,16 +24,19 @@ training:
 generation:
   convert_from: classical
   convert_to: jazz
+  midi_file_path: "input/debussy-clair-de-lune.mid"
+  wav_file_path: "input/debussy-clair-de-lune_original.wav"
+  n_novel_peaks: 5
   passes:
     pass_1:
       corruption_rate: 0.5
       corruption_type: onset_duration_mask
     pass_2:
       corruption_rate: 1.0
-      corruption_type: incorrect_transposition
-    pass_3:
-      corruption_rate: 0.5
-      corruption_type: random
+      corruption_type: fragmentation
+    # pass_3:
+    #   corruption_rate: 0.5
+    #   corruption_type: random
 
 raw_data:
   raw_data_folders: 

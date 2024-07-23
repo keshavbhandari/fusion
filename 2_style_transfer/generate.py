@@ -34,7 +34,7 @@ with open(args.config, 'r') as f:
 artifact_folder = configs["raw_data"]["artifact_folder"]
 raw_data_folders = configs["raw_data"]["raw_data_folders"]
 data_path = raw_data_folders['classical']['folder_path']
-output_folder = os.path.join("/homes/kb658/fusion/output")
+output_folder = os.path.join("output")
 # Create output folder if it does not exist
 if not os.path.exists(output_folder):
     os.makedirs(output_folder)
@@ -106,7 +106,7 @@ def generate_one_pass(tokenized_sequence, fusion_model, configs, corruption_type
     corruption_obj = DataCorruption()
     separated_sequence = corruption_obj.seperateitems(tokenized_sequence)
     # Get the indices of the novelty tokens
-    novelty_segments = [n for n, i in enumerate(separated_sequence) if '<N>' in i] + [n+1 for n, i in enumerate(separated_sequence) if '<n>' in i]
+    novelty_segments = [n for n, i in enumerate(separated_sequence) if '<N>' in i] #+ [n+1 for n, i in enumerate(separated_sequence) if '<n>' in i]
     all_segment_indices, _, _, _ = corruption_obj.get_segment_to_corrupt(separated_sequence, t_segment_ind=2, exclude_idx=novelty_segments)
 
     t_segment_ind = 2
@@ -176,29 +176,32 @@ with open(os.path.join(artifact_folder, "fusion", "valid_file_list.json"), "r") 
 
 # Choose a random key whose value is classical from the valid sequences as file_path
 valid_file_paths = [key for key, value in valid_sequences.items() if value == configs['generation']['convert_from']]
-file_path = random.choice(valid_file_paths)
+file_path = configs['generation']['midi_file_path']
+if file_path is None or file_path == "":
+    file_path = random.choice(valid_file_paths)
 # file_path = os.path.join("/homes/kb658/fusion/input/pass_1_generated_Things Ain't What They Used To Be - Live At Maybeck Recital Hall, Berkeley, CA  January 20, 1991.midi")
-file_path = "/homes/kb658/fusion/input/debussy-clair-de-lune.mid"
+# file_path = "/homes/kb658/fusion/input/debussy-clair-de-lune.mid"
 print("File path:", file_path)
 mid = MidiDict.from_midi(file_path)
 aria_tokenizer = AbsTokenizer()
 tokenized_sequence = aria_tokenizer.tokenize(mid)
 
-# # Save the original MIDI file
-# filename = os.path.basename(file_path)
-# mid_dict = aria_tokenizer.detokenize(tokenized_sequence)
-# original_mid = mid_dict.to_midi()
-# original_mid.save(os.path.join(output_folder, "original_" + filename))
+# Save the original MIDI file
+filename = os.path.basename(file_path)
+mid_dict = aria_tokenizer.detokenize(tokenized_sequence)
+original_mid = mid_dict.to_midi()
+original_mid.save(os.path.join(output_folder, "original_" + filename))
 
 # Get the instrument token
 instrument_token = tokenized_sequence[0]
 tokenized_sequence = tokenized_sequence[2:-1]
 
 # Novelty based segmentation
-audio_file = "/homes/kb658/fusion/input/debussy-clair-de-lune_original.wav"
-config_file = "/homes/kb658/fusion/configs/config_ssm.yaml"
+audio_file = configs['generation']['wav_file_path']
+config_file = "configs/config_ssm.yaml"
+n_novel_peaks = configs['generation']['n_novel_peaks']
 segment_novelty = Segment_Novelty(config_file, audio_file)
-peak_times = segment_novelty.get_peak_timestamps(audio_file, 5)
+peak_times = segment_novelty.get_peak_timestamps(audio_file, n_novel_peaks)
 pretty_midi_data = pretty_midi.PrettyMIDI(file_path)
 novel_note_numbers, novel_notes = get_midi_notes_from_tick(mid, pretty_midi_data, peak_times)
 
@@ -225,4 +228,4 @@ generated_sequence = [('prefix', 'instrument', 'piano'), "<S>"] + tokenized_sequ
 mid_dict = aria_tokenizer.detokenize(generated_sequence)
 generated_mid = mid_dict.to_midi()
 filename = os.path.basename(file_path)
-generated_mid.save(os.path.join(output_folder, f"pass_{passes}_generated_" + filename))
+generated_mid.save(os.path.join(output_folder, "generated_" + filename))
