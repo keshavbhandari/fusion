@@ -4,6 +4,7 @@ import pickle
 import os
 import random
 import numpy as np
+import copy
 import sys
 import argparse
 import torch
@@ -108,6 +109,13 @@ def generate_sequence(model, tokenizer, input_ids, max_length, temperature=1.0, 
     attn_mask = torch.where(input_ids != 0, 1, 0).to(device)
     # Prepare the initial decoder input
     decoder_input_ids = torch.tensor([[tokenizer["<S>"]]]).to(device)
+
+    decode_tokenizer = {v: k for k, v in tokenizer.items()}
+    same_onset_stack = []
+    different_onset_stack = []
+    activate_same_onset_constraint = False
+    activate_different_onset_constraint = False
+    chord_strength = 3
     
     with torch.no_grad():
         for _ in range(max_length):
@@ -118,6 +126,39 @@ def generate_sequence(model, tokenizer, input_ids, max_length, temperature=1.0, 
             
             # Apply temperature
             next_token_logits = next_token_logits / temperature
+
+            # Apply constraints
+            if activate_same_onset_constraint:
+                # Set all tokens that are not same_onset_stack[-1] to -inf
+                include_onset_tokens = [('onset', same_onset_stack[-1][-1]), 
+                                        ('onset', same_onset_stack[-1][-1] + 10), 
+                                        ('onset', same_onset_stack[-1][-1] + 20), 
+                                        ('onset', same_onset_stack[-1][-1] + 30), 
+                                        ('onset', same_onset_stack[-1][-1] + 40), 
+                                        ('onset', same_onset_stack[-1][-1] + 50)]
+                include_onset_tokens = [token for token in include_onset_tokens if token in tokenizer]
+                include_tokens_idx = [tokenizer[token] for token in include_onset_tokens]
+                # Set all tokens that are not in include_tokens_idx to -inf
+                next_token_logits[0, [idx for idx in range(next_token_logits.shape[-1]) if idx not in include_tokens_idx]] = float('-inf')
+                activate_same_onset_constraint = False
+                # if len(same_onset_stack) == chord_strength:
+                #     different_onset_stack = copy.deepcopy(same_onset_stack)
+                #     same_onset_stack = []
+                
+            if activate_different_onset_constraint:
+                # Set all tokens that are in different_onset_stack to -inf
+                exclude_onset_tokens = [('onset', different_onset_stack[-1][-1]),
+                                        ('onset', different_onset_stack[-1][-1] + 10),
+                                        ('onset', different_onset_stack[-1][-1] + 20),
+                                        ('onset', different_onset_stack[-1][-1] + 30),
+                                        ('onset', different_onset_stack[-1][-1] + 40),
+                                        ('onset', different_onset_stack[-1][-1] + 50)]
+                exclude_onset_tokens = [token for token in exclude_onset_tokens if token in tokenizer]
+                include_tokens_idx = [tokenizer[token] for token in exclude_onset_tokens]
+                # Set all tokens that are in include_tokens_idx to -inf
+                next_token_logits[0, [idx for idx in range(next_token_logits.shape[-1]) if idx in include_tokens_idx]] = float('-inf')
+                activate_different_onset_constraint = False
+                different_onset_stack = []                
             
             # Apply top-k filtering
             if top_k > 0:
@@ -142,7 +183,32 @@ def generate_sequence(model, tokenizer, input_ids, max_length, temperature=1.0, 
             
             # Append the next token to the sequence
             decoder_input_ids = torch.cat([decoder_input_ids, next_token], dim=-1)
+
+            ### Constraints ###
+            # Check if the current token is an onset token
+            if "onset" in decode_tokenizer[next_token.item()]:
+                # Check if list is empty
+                if len(same_onset_stack) == 0:
+                    same_onset_stack.append(decode_tokenizer[next_token.item()])
+                # Check if the current token is close to the previous token indicating a chord
+                elif abs(same_onset_stack[-1][-1] - decode_tokenizer[next_token.item()][-1]) <= 50:
+                    same_onset_stack.append(decode_tokenizer[next_token.item()])
+                # else:
+                #     same_onset_stack = [decode_tokenizer[next_token.item()]]
             
+            # Check if we need to activate a constraint
+            if 1 < len(same_onset_stack) < chord_strength and "piano" in decode_tokenizer[next_token.item()]:
+                activate_same_onset_constraint = True
+            elif len(same_onset_stack) == chord_strength and "piano" in decode_tokenizer[next_token.item()]:
+                activate_same_onset_constraint = False
+                different_onset_stack = copy.deepcopy(same_onset_stack)
+                same_onset_stack = []
+                activate_different_onset_constraint = True
+            if len(different_onset_stack) == chord_strength and "piano" in decode_tokenizer[next_token.item()]:
+                activate_different_onset_constraint = True
+                activate_same_onset_constraint = False
+            ### Constraints ###
+                
             # Check if we've generated an EOS token
             if next_token.item() == tokenizer["<E>"]:
                 break
@@ -165,7 +231,7 @@ generated_sequences = [token for token in generated_sequences if token not in ["
 generated_sequences = [instrument_token, "<S>"] + generated_sequences + ["<E>"]
 
 # Print the generated sequences
-print("Generated sequences:", generated_sequences)
+print("Length of generated sequences:", len(generated_sequences))
 
 # Write the generated sequences to a MIDI file
 mid_dict = aria_tokenizer.detokenize(generated_sequences)

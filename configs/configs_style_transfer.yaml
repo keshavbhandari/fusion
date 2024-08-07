@@ -1,50 +1,81 @@
 
 model:
-  fusion_model:
-    encoder_max_sequence_length: 1024
-    decoder_max_sequence_length: 1024
-    encoder_num_layers: 8
-    encoder_num_heads: 8
-    encoder_hidden_size: 512
-    encoder_intermediate_size: 2048
-    decoder_num_layers: 8
-    decoder_num_heads: 8
-    decoder_hidden_size: 512
-    decoder_intermediate_size: 2048
+  encoder_max_sequence_length: 2048
+  decoder_max_sequence_length: 512
+  encoder_num_layers: 12
+  encoder_num_heads: 8
+  encoder_hidden_size: 512
+  encoder_intermediate_size: 2048
+  decoder_num_layers: 12
+  decoder_num_heads: 8
+  decoder_hidden_size: 512
+  decoder_intermediate_size: 2048
+
+classifier_model:
+  encoder_max_sequence_length: 1024
+  encoder_num_layers: 12
+  encoder_num_heads: 8
+  encoder_hidden_size: 512
+  encoder_intermediate_size: 2048
+  encoder_dropout: 0.1
 
 training:
-  fusion:
-    epochs: 700
+  pretraining:
+    epochs: 500
+    batch_size: 4 #24
+    learning_rate: 0.0001
+    weight_decay: 0.01
+    gradient_accumulation_steps: 1
+    warmup_ratio: 0.3
+    run_name: pre_trained_model
+    run_pretraining: True
+  fine_tuning:
+    epochs: 500
+    batch_size: 4
+    learning_rate: 0.000005
+    weight_decay: 0.01
+    gradient_accumulation_steps: 1
+    warmup_ratio: 0.2
+    run_name: fine_tuned_model
+  classifier:
+    epochs: 200
     batch_size: 64
     learning_rate: 0.0001
     weight_decay: 0.01
     gradient_accumulation_steps: 1
-    run_name: style_transfer_700_epochs
+    warmup_ratio: 0.2
+    run_name: classifier_model
 
 generation:
   convert_from: classical
   convert_to: jazz
-  midi_file_path: "input/debussy-clair-de-lune.mid"
-  wav_file_path: "input/debussy-clair-de-lune_original.wav"
-  n_novel_peaks: 5
+  # midi_file_path: "input/debussy-clair-de-lune.mid"
+  # wav_file_path: "input/debussy-clair-de-lune_original.wav"
+  midi_file_path: "input/schumann_kinderszenen_15_7_(c)harfesoft.mid"
+  wav_file_path: "input/schumann_kinderszenen_15_7_(c)harfesoft.wav"
+  n_novel_peaks: 3
   passes:
     pass_1:
-      corruption_rate: 0.5
+      corruption_rate: 1.0
       corruption_type: onset_duration_mask
     pass_2:
-      corruption_rate: 1.0
+      corruption_rate: 0.5
       corruption_type: fragmentation
     # pass_3:
     #   corruption_rate: 0.5
-    #   corruption_type: random
+    #   corruption_type: incorrect_transposition
+    # pass_4:
+    #   corruption_rate: 0.25
+    #   corruption_type: whole_mask
 
 raw_data:
   raw_data_folders: 
-    classical:
-      folder_path: /import/c4dm-datasets/maestro-v3.0.0
-    pop:
-      folder_path: /import/c4dm-datasets-ext/POP909
-    jazz:
-      folder_path: /import/c4dm-datasets/PiJAMA/data/midi # /import/c4dm-datasets-ext/doug_mcenzie_jazz
-  build_dataset: False
+    pre_training:
+      folder_paths: ['/import/c4dm-datasets/aria/transcriptions/atepp', '/import/c4dm-datasets/aria/transcriptions/mazurkas'] # '/homes/kb658/fusion/data/ClassicalArchives-MIDI-Collection'
+      genre: classical
+    fine_tuning:
+      classical_folder_paths: ['/import/c4dm-datasets/maestro-v3.0.0']
+      jazz_folder_paths: ['/import/c4dm-datasets/aria/transcriptions/pijama', '/import/c4dm-datasets-ext/doug_mcenzie_jazz']
+      pop_folder_paths: ['/import/c4dm-datasets-ext/POP909']
+  build_dataset: True
   artifact_folder: artifacts

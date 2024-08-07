@@ -33,14 +33,13 @@ with open(args.config, 'r') as f:
     
 artifact_folder = configs["raw_data"]["artifact_folder"]
 raw_data_folders = configs["raw_data"]["raw_data_folders"]
-data_path = raw_data_folders['classical']['folder_path']
 output_folder = os.path.join("output")
 # Create output folder if it does not exist
 if not os.path.exists(output_folder):
     os.makedirs(output_folder)
 
 # Get tokenizer
-tokenizer_filepath = os.path.join(artifact_folder, "fusion", "vocab_corrupted.pkl")
+tokenizer_filepath = os.path.join(artifact_folder, "style_transfer", "vocab_corrupted.pkl")
 # Load the tokenizer dictionary
 with open(tokenizer_filepath, "rb") as f:
     tokenizer = pickle.load(f)
@@ -49,7 +48,7 @@ with open(tokenizer_filepath, "rb") as f:
 decode_tokenizer = {v: k for k, v in tokenizer.items()}
 
 # Load the fusion model
-fusion_model = EncoderDecoderModel.from_pretrained(os.path.join(artifact_folder, "fusion", "style_transfer_700_epochs"))
+fusion_model = EncoderDecoderModel.from_pretrained(os.path.join(artifact_folder, "style_transfer", "jazz_fine_tuned_model"))
 fusion_model.eval()
 fusion_model.to("cuda" if cuda_available() else "cpu")
 print("Fusion model loaded")
@@ -99,14 +98,14 @@ def generate_one_pass(tokenized_sequence, fusion_model, configs, corruption_type
     convert_to = configs['generation']['convert_to']
 
     # Get the encoder and decoder max sequence length
-    encoder_max_sequence_length = configs['model']['fusion_model']['encoder_max_sequence_length']
-    decoder_max_sequence_length = configs['model']['fusion_model']['decoder_max_sequence_length']
+    encoder_max_sequence_length = configs['model']['encoder_max_sequence_length']
+    decoder_max_sequence_length = configs['model']['decoder_max_sequence_length']
     
     
     corruption_obj = DataCorruption()
     separated_sequence = corruption_obj.seperateitems(tokenized_sequence)
     # Get the indices of the novelty tokens
-    novelty_segments = [n for n, i in enumerate(separated_sequence) if '<N>' in i] #+ [n+1 for n, i in enumerate(separated_sequence) if '<n>' in i]
+    novelty_segments = [n for n, i in enumerate(separated_sequence) if '<N>' in i]
     all_segment_indices, _, _, _ = corruption_obj.get_segment_to_corrupt(separated_sequence, t_segment_ind=2, exclude_idx=novelty_segments)
 
     t_segment_ind = 2
@@ -118,7 +117,7 @@ def generate_one_pass(tokenized_sequence, fusion_model, configs, corruption_type
     while t_segment_ind < n_iterations:
 
         if random.random() < corruption_rate:
-            output_dict = corruption_obj.apply_random_corruption(tokenized_sequence, context_before=5, context_after=1, meta_data=[convert_to], t_segment_ind=t_segment_ind, inference=True, corruption_type=corruption_type)
+            output_dict = corruption_obj.apply_random_corruption(tokenized_sequence, context_before=5, context_after=5, meta_data=[convert_to], t_segment_ind=t_segment_ind, inference=True, corruption_type=corruption_type)
             index = output_dict['index']
             corrupted_sequence = output_dict['corrupted_sequence']
             corrupted_sequence = unflatten_corrupted(corrupted_sequence)
@@ -171,7 +170,7 @@ def add_novelty_segment_token(tokenized_sequence, novel_note_numbers):
     return new_tokenized_sequence
 
 # Open JSON file
-with open(os.path.join(artifact_folder, "fusion", "valid_file_list.json"), "r") as f:
+with open(os.path.join(artifact_folder, "style_transfer", "jazz_fine_tuning_valid_file_list.json"), "r") as f:
     valid_sequences = json.load(f)
 
 # Choose a random key whose value is classical from the valid sequences as file_path
@@ -180,6 +179,7 @@ file_path = configs['generation']['midi_file_path']
 if file_path is None or file_path == "":
     file_path = random.choice(valid_file_paths)
 # file_path = os.path.join("/homes/kb658/fusion/input/pass_1_generated_Things Ain't What They Used To Be - Live At Maybeck Recital Hall, Berkeley, CA  January 20, 1991.midi")
+
 # file_path = "/homes/kb658/fusion/input/debussy-clair-de-lune.mid"
 print("File path:", file_path)
 mid = MidiDict.from_midi(file_path)
