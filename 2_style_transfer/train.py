@@ -221,7 +221,7 @@ trainer = Trainer(
 
 # Train and save the model
 print("Training the model")
-train_result = trainer.train()
+train_result = trainer.train(resume_from_checkpoint=False)
 trainer.save_model()
 trainer.log_metrics("train", train_result.metrics)
 trainer.save_metrics("train", train_result.metrics)

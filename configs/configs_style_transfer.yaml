@@ -28,15 +28,15 @@ training:
     gradient_accumulation_steps: 1
     warmup_ratio: 0.3
     run_name: pre_trained_model
-    run_pretraining: True
+    run_pretraining: False
   fine_tuning:
-    epochs: 500
+    epochs: 2000 #1500
     batch_size: 4
-    learning_rate: 0.000005
+    learning_rate: 0.00005 #0.00001
     weight_decay: 0.01
     gradient_accumulation_steps: 1
-    warmup_ratio: 0.2
-    run_name: fine_tuned_model
+    warmup_ratio: 0.1
+    run_name: fine_tuned_model_v3
   classifier:
     epochs: 200
     batch_size: 64
@@ -56,17 +56,20 @@ generation:
   n_novel_peaks: 3
   passes:
     pass_1:
-      corruption_rate: 1.0
-      corruption_type: onset_duration_mask
+      corruption_rate: 0.25
+      corruption_type: whole_mask
     pass_2:
       corruption_rate: 0.5
-      corruption_type: fragmentation
-    # pass_3:
-    #   corruption_rate: 0.5
-    #   corruption_type: incorrect_transposition
-    # pass_4:
-    #   corruption_rate: 0.25
-    #   corruption_type: whole_mask
+      corruption_type: note_modification
+    pass_3:
+      corruption_rate: 0.5
+      corruption_type: incorrect_transposition
+    pass_4:
+      corruption_rate: 0.75
+      corruption_type: onset_duration_mask
+    pass_5:
+      corruption_rate: 0.5
+      corruption_type: pitch_velocity_mask
 
 raw_data:
   raw_data_folders: 

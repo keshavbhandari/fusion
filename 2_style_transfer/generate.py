@@ -48,7 +48,7 @@ with open(tokenizer_filepath, "rb") as f:
 decode_tokenizer = {v: k for k, v in tokenizer.items()}
 
 # Load the fusion model
-fusion_model = EncoderDecoderModel.from_pretrained(os.path.join(artifact_folder, "style_transfer", "jazz_fine_tuned_model"))
+fusion_model = EncoderDecoderModel.from_pretrained(os.path.join(artifact_folder, "style_transfer", "fine_tuned_model_v2"))
 fusion_model.eval()
 fusion_model.to("cuda" if cuda_available() else "cpu")
 print("Fusion model loaded")
@@ -74,7 +74,7 @@ def refine_sequence(corrupted_sequence, tokenizer, model, encoder_max_sequence_l
                                     num_beams=1,
                                     early_stopping=False,
                                     do_sample=True,
-                                    temperature=0.9,
+                                    temperature=1.0,
                                     top_k=50,
                                     top_p=1.0,
                                     pad_token_id=0,
@@ -170,7 +170,7 @@ def add_novelty_segment_token(tokenized_sequence, novel_note_numbers):
     return new_tokenized_sequence
 
 # Open JSON file
-with open(os.path.join(artifact_folder, "style_transfer", "jazz_fine_tuning_valid_file_list.json"), "r") as f:
+with open(os.path.join(artifact_folder, "style_transfer", "fine_tuning_valid_file_list.json"), "r") as f:
     valid_sequences = json.load(f)
 
 # Choose a random key whose value is classical from the valid sequences as file_path
