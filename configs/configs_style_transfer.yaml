@@ -49,12 +49,14 @@ training:
 generation:
   convert_from: classical
   convert_to: jazz
-  midi_file_path: "/homes/kb658/fusion/input/fur-elise.mid"
-  wav_file_path: "/homes/kb658/fusion/input/fur-elise.wav"
-  # midi_file_path: "input/rach_prelude.mid"
-  # wav_file_path: ""
+  # midi_file_path: "/homes/kb658/fusion/input/fur-elise.mid"
+  # wav_file_path: "/homes/kb658/fusion/input/fur-elise.wav"
+  # midi_file_path: "/homes/kb658/fusion/input/debussy-clair-de-lune.mid"
+  # wav_file_path: "/homes/kb658/fusion/input/debussy-clair-de-lune_original.wav"
   # midi_file_path: "input/schumann_kinderszenen_15_7_(c)harfesoft.mid"
   # wav_file_path: "input/schumann_kinderszenen_15_7_(c)harfesoft.wav"
+  midi_file_path: "/homes/kb658/fusion/evaluations/pop/92/original_92.mid"
+  wav_file_path: "/homes/kb658/fusion/evaluations/pop/92/original_92.wav"
   novel_peaks_pct: 0.05
   context_before: 5 #5
   context_after: 5 #5
@@ -62,10 +64,10 @@ generation:
   passes:
     pass_1:
       corruption_rate: 0.5
-      corruption_type: onset_duration_mask
+      corruption_type: pitch_velocity_mask
     pass_2:
       corruption_rate: 0.5
-      corruption_type: pitch_velocity_mask
+      corruption_type: onset_duration_mask
     pass_3:
       corruption_rate: 0.5
       corruption_type: incorrect_transposition
@@ -81,15 +83,15 @@ generation:
     pass_7:
       corruption_rate: 0.5
       corruption_type: fragmentation
-    pass_8:
-      corruption_rate: 0.5
-      corruption_type: permute_pitches
-    pass_9:
-      corruption_rate: 0.5
-      corruption_type: pitch_velocity_mask
-    pass_10:
-      corruption_rate: 0.25
-      corruption_type: whole_mask
+    # pass_8:
+    #   corruption_rate: 0.5
+    #   corruption_type: permute_pitches
+    # pass_9:
+    #   corruption_rate: 0.5
+    #   corruption_type: pitch_velocity_mask
+    # pass_10:
+    #   corruption_rate: 0.25
+    #   corruption_type: whole_mask
 
 raw_data:
   raw_data_folders: 

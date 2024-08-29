@@ -9,7 +9,7 @@ import sys
 import argparse
 from tqdm import tqdm
 import time
-import multiprocessing
+import torch.multiprocessing as mp
 from functools import partial
 import warnings
 warnings.filterwarnings("ignore", category=UserWarning) 
@@ -17,6 +17,8 @@ warnings.filterwarnings("ignore", category=FutureWarning)
 import torch
 torch.set_warn_always(False)
 from torch.nn import functional as F
+from torch.nn.parallel import DistributedDataParallel as DDP
+from torch import distributed as dist
 from transformers import EncoderDecoderModel
 from torch.cuda import is_available as cuda_available
 from aria.data.midi import MidiDict
@@ -66,12 +68,21 @@ eval_folder = os.path.join("evaluations")
 if not os.path.exists(eval_folder):
     os.makedirs(eval_folder)
 
+def setup(rank, world_size):
+    os.environ['MASTER_ADDR'] = 'localhost'
+    os.environ['MASTER_PORT'] = '12355'
+    dist.init_process_group("nccl", rank=rank, world_size=world_size)
 
-def generate_batch_on_gpu(gpu_id, midi_file_paths, convert_to, context_before, context_after, 
+def cleanup():
+    dist.destroy_process_group()
+
+def generate_batch_on_gpu(rank, world_size, midi_file_paths, convert_to, context_before, context_after, 
                           t_segment_start, corruption_passes, corruption_name, corruption_rate, 
                           pass_number, fusion_model, configs, tokenizer, decode_tokenizer, experiment_name, 
-                          counter, total_files, write_intermediate_passes):
-    torch.cuda.set_device(gpu_id)
+                          counter, total_files):
+    # torch.cuda.set_device(gpu_id)
+    setup(rank, world_size)
+    model = DDP(fusion_model.to(rank), device_ids=[rank])
     for i, item in enumerate(midi_file_paths):
         midi_file_path = item
         audio_file_path = midi_file_path.replace(".mid", ".wav")
@@ -79,9 +90,9 @@ def generate_batch_on_gpu(gpu_id, midi_file_paths, convert_to, context_before, c
         print(output_folder)
         # time.sleep(30)
         try:
-            generate(midi_file_path, audio_file_path, fusion_model, configs, t_segment_start,
+            generate(midi_file_path, audio_file_path, model, configs, t_segment_start,
                  convert_to, context_before, context_after, corruption_passes,
-                 tokenizer, decode_tokenizer, output_folder, save_original=False, quiet=True, write_intermediate_passes=write_intermediate_passes)
+                 tokenizer, decode_tokenizer, output_folder, save_original=False, quiet=True)
         except Exception as e:
             print(f"Error: {e}")
             print(f"Error in processing file: {midi_file_path}")
@@ -91,39 +102,58 @@ def generate_batch_on_gpu(gpu_id, midi_file_paths, convert_to, context_before, c
             counter.value += 1
         tqdm.write(f"Progress: {counter.value}/{total_files} files processed.")
 
+    # Clean up
+    cleanup()
+
+
+# def run_parallel_generation(midi_file_paths, convert_to, context_before, context_after,
+#                             t_segment_start, corruption_passes, corruption_name, corruption_rate, 
+#                             pass_number, fusion_model, configs, tokenizer, decode_tokenizer, 
+#                             experiment_name, max_processes_per_gpu=2):
+    
+#     available_gpus = list(range(torch.cuda.device_count()))
+#     midi_files_split = np.array_split(midi_file_paths, len(available_gpus) * max_processes_per_gpu)
+    
+#     # Shared counter
+#     counter = multiprocessing.Value('i', 0)
+#     processes = []
+#     for gpu_id in available_gpus:
+#         fusion_model.to(f"cuda:{gpu_id}")
+#         fusion_model.share_memory()
+#         for i in range(max_processes_per_gpu):
+#             p = multiprocessing.Process(target=generate_batch_on_gpu, 
+#                                          args=(gpu_id, midi_files_split[gpu_id * max_processes_per_gpu + i], 
+#                                                convert_to, context_before, context_after, 
+#                                                t_segment_start, corruption_passes, corruption_name, 
+#                                                corruption_rate, pass_number, fusion_model, 
+#                                                configs, tokenizer, decode_tokenizer, experiment_name, counter, len(midi_file_paths)))
+#             processes.append(p)
+#             p.start()
+
+#     for p in processes:
+#         p.join()
 
 def run_parallel_generation(midi_file_paths, convert_to, context_before, context_after,
                             t_segment_start, corruption_passes, corruption_name, corruption_rate, 
                             pass_number, fusion_model, configs, tokenizer, decode_tokenizer, 
-                            experiment_name, max_processes_per_gpu, write_intermediate_passes):
-    
-    available_gpus = list(range(torch.cuda.device_count()))
-    midi_files_split = np.array_split(midi_file_paths, len(available_gpus) * max_processes_per_gpu)
-    
-    # Shared counter
-    counter = multiprocessing.Value('i', 0)
-    processes = []
-    for gpu_id in available_gpus:
-        fusion_model.to(f"cuda:{gpu_id}")
-        fusion_model.share_memory()
-        for i in range(max_processes_per_gpu):
-            p = multiprocessing.Process(target=generate_batch_on_gpu, 
-                                         args=(gpu_id, midi_files_split[gpu_id * max_processes_per_gpu + i], 
-                                               convert_to, context_before, context_after, 
-                                               t_segment_start, corruption_passes, corruption_name, 
-                                               corruption_rate, pass_number, fusion_model, 
-                                               configs, tokenizer, decode_tokenizer, experiment_name, 
-                                               counter, len(midi_file_paths), write_intermediate_passes))
-            processes.append(p)
-            p.start()
+                            experiment_name, max_processes_per_gpu=2):
 
-    for p in processes:
-        p.join()
+    available_gpus = torch.cuda.device_count()
+    world_size = available_gpus * max_processes_per_gpu
+    midi_files_split = np.array_split(midi_file_paths, world_size)
+    counter = mp.Value('i', 0)
+
+    mp.spawn(generate_batch_on_gpu, 
+             args=(world_size, midi_files_split, convert_to, context_before, context_after, 
+                   t_segment_start, corruption_passes, corruption_name, corruption_rate, 
+                   pass_number, fusion_model, configs, tokenizer, decode_tokenizer, 
+                   experiment_name, counter, len(midi_file_paths)),
+             nprocs=world_size)
 
 
 def run_evaluation(midi_file_paths, convert_to, context_before, context_after, t_segment_start, 
                        corruptions, corruption_rates, n_passes, fusion_model, configs, tokenizer, decode_tokenizer, 
-                       experiment_name, max_processes_per_gpu, write_intermediate_passes):
+                       experiment_name, max_processes_per_gpu):
     print(f"Running experiment {experiment_name}")
     for corruption_name, corruption_function in corruptions.items():
         print(f"Corruption name: {corruption_name}")
@@ -137,7 +167,7 @@ def run_evaluation(midi_file_paths, convert_to, context_before, context_after, t
                 run_parallel_generation(midi_file_paths, convert_to, context_before, context_after, 
                                         t_segment_start, corruption_passes, corruption_name, corruption_rate, 
                                         pass_number, fusion_model, configs, tokenizer, decode_tokenizer, experiment_name, 
-                                        max_processes_per_gpu, write_intermediate_passes)
+                                        max_processes_per_gpu=max_processes_per_gpu)
     print(f"Experiment {experiment_name} completed")
 
 
@@ -172,20 +202,19 @@ else:
 if __name__ == '__main__':
 
     # Set the start method
-    multiprocessing.set_start_method('spawn')
+    mp.set_start_method('spawn')
     # fusion_model.share_memory()
 
     ################ Experiment 1: Single Pass with Specific Corruptions ################
     data_corruption_obj = DataCorruption()
     corruptions = data_corruption_obj.corruption_functions
     corruption_rates = [1.0]
-    n_passes = [10]
+    n_passes = [1,3,5,10]
     context_before = 5
     context_after = 5
     t_segment_start = 2
     convert_to = "jazz"
     experiment_name = "experiment_1"
-    write_intermediate_passes = True
     max_processes_per_gpu = 4  # Limit to n processes per GPU
 
     # Example usage:
@@ -193,4 +222,4 @@ if __name__ == '__main__':
     print(f"Number of files to process: {len(filtered_midi_file_paths)}")
     run_evaluation(filtered_midi_file_paths, convert_to, context_before, context_after, t_segment_start, 
                    corruptions, corruption_rates, n_passes, fusion_model, configs, tokenizer, decode_tokenizer, 
-                   experiment_name, max_processes_per_gpu, write_intermediate_passes=write_intermediate_passes)
+                   experiment_name, max_processes_per_gpu)

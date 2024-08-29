@@ -4,6 +4,7 @@ import pickle
 import os
 import random
 import numpy as np
+import copy
 import sys
 import argparse
 from tqdm import tqdm
@@ -84,7 +85,7 @@ def generate_one_pass(tokenized_sequence, fusion_model, configs,
     while t_segment_ind < n_iterations:
 
         if random.random() < corruption_rate:
-            output_dict = corruption_obj.apply_random_corruption(tokenized_sequence, context_before=context_before, context_after=context_after, meta_data=[convert_to], t_segment_ind=t_segment_ind, inference=False, corruption_type=corruption_type)
+            output_dict = corruption_obj.apply_random_corruption(tokenized_sequence, context_before=context_before, context_after=context_after, meta_data=[convert_to], t_segment_ind=t_segment_ind, inference=False, corruption_type=corruption_type, run_corruption=True, exclude_idx=novelty_segments)
             index = output_dict['index']
             corrupted_sequence = output_dict['corrupted_sequence']
             corrupted_sequence = unflatten_corrupted(corrupted_sequence)
@@ -92,7 +93,8 @@ def generate_one_pass(tokenized_sequence, fusion_model, configs,
             flattened_refined_segment = flatten(refined_segment, add_special_tokens=True)
             separated_sequence[index] = flattened_refined_segment
             tokenized_sequence = corruption_obj.concatenate_list(separated_sequence)
-            print("Corrupted t_segment_ind:", t_segment_ind, "Corruption type:", output_dict['corruption_type'])
+            if not quiet:
+                print("Corrupted t_segment_ind:", t_segment_ind, "Corruption type:", output_dict['corruption_type'])
         
         t_segment_ind += jump_every
         # Update the progress bar
@@ -103,7 +105,7 @@ def generate_one_pass(tokenized_sequence, fusion_model, configs,
     return tokenized_sequence
 
 
-def get_midi_notes_from_tick(midi_dict, midi_data, peak_times):
+def get_midi_notes_from_tick(midi_dict, midi_data, peak_times, quiet):
     novel_note_numbers = []
     novel_notes = []
     for n, note in enumerate(midi_dict.note_msgs):
@@ -113,7 +115,8 @@ def get_midi_notes_from_tick(midi_dict, midi_data, peak_times):
             time_in_sec = pretty_midi.PrettyMIDI.tick_to_time(midi_data, tick)
 
             if time_in_sec > peak_times[0]:
-                print(f"Note {n} is at {time_in_sec} seconds")
+                if not quiet:
+                    print(f"Note {n} is at {time_in_sec} seconds")
                 novel_note_numbers.append(n)
                 novel_notes.append(note)
                 peak_times = np.delete(peak_times, 0)
@@ -139,12 +142,36 @@ def add_novelty_segment_token(tokenized_sequence, novel_note_numbers):
     return new_tokenized_sequence
 
 
+def write_file(midi_file_path, output_folder, tokenized_sequence, aria_tokenizer):
+    sequence = copy.deepcopy(tokenized_sequence)
+    # Unflatten the tokenized sequence
+    sequence = unflatten_for_aria(sequence)
+
+    # Filter out <N> tokens
+    sequence = [token for token in sequence if token != "<N>"]
+
+    # Write the generated sequences to a MIDI file
+    generated_sequence = [('prefix', 'instrument', 'piano'), "<S>"] + sequence + ["<E>"]
+    mid_dict = aria_tokenizer.detokenize(generated_sequence)
+    generated_mid = mid_dict.to_midi()
+    filename = os.path.basename(midi_file_path)
+    # Create output folder if it does not exist
+    if not os.path.exists(output_folder):
+        os.makedirs(output_folder)
+    generated_mid.save(os.path.join(output_folder, "generated_" + filename))
+
+
 def generate(midi_file_path, audio_file_path, fusion_model, configs, 
              t_segment_start, convert_to, context_before, context_after, 
-             corruption_passes, tokenizer, decode_tokenizer, output_folder, save_original=False, quiet=False):
+             corruption_passes, tokenizer, decode_tokenizer, output_folder, 
+             save_original=False, quiet=False, write_intermediate_passes=False):
     
+    if not os.path.exists(output_folder):
+        os.makedirs(output_folder)
+
     # Load the MIDI file
-    print("File path:", midi_file_path)
+    if not quiet:
+        print("File path:", midi_file_path)
     filename = os.path.basename(midi_file_path)
     mid = MidiDict.from_midi(midi_file_path)
     aria_tokenizer = AbsTokenizer()
@@ -168,11 +195,12 @@ def generate(midi_file_path, audio_file_path, fusion_model, configs,
         n_t_segments = len([t for t in tokenized_sequence if t == "<T>"])
         novel_peaks_pct = configs['generation']['novel_peaks_pct']
         n_novel_peaks = np.ceil(novel_peaks_pct * n_t_segments).astype(int)
-        print("Number of novel peaks:", n_novel_peaks)
+        if not quiet:
+            print("Number of novel peaks:", n_novel_peaks)
         segment_novelty = Segment_Novelty(ssm_config_file, audio_file_path)
         peak_times = segment_novelty.get_peak_timestamps(audio_file_path, n_novel_peaks)
         pretty_midi_data = pretty_midi.PrettyMIDI(midi_file_path)
-        novel_note_numbers, novel_notes = get_midi_notes_from_tick(mid, pretty_midi_data, peak_times)
+        novel_note_numbers, novel_notes = get_midi_notes_from_tick(mid, pretty_midi_data, peak_times, quiet)
 
     # Flatten the tokenized sequence
     tokenized_sequence = flatten(tokenized_sequence, add_special_tokens=True)
@@ -185,7 +213,8 @@ def generate(midi_file_path, audio_file_path, fusion_model, configs,
     data_corruption_obj = DataCorruption()
     corruptions = data_corruption_obj.corruption_functions
     for i in range(passes):
-        print("Pass:", i + 1)
+        if not quiet:
+            print("Pass:", i + 1)
         corruption_type = corruption_passes['pass_' + str(i + 1)]['corruption_type']
         if corruption_type == "random":
             corruption_type = random.choice(corruptions)
@@ -196,15 +225,29 @@ def generate(midi_file_path, audio_file_path, fusion_model, configs,
                                                context_after, corruption_type, corruption_rate, 
                                                tokenizer, decode_tokenizer, quiet)
 
-    # Unflatten the tokenized sequence
-    tokenized_sequence = unflatten_for_aria(tokenized_sequence)
+        if write_intermediate_passes:
+            pass_number = f"pass_{passes}"
+            if pass_number in output_folder:
+                new_output_folder = output_folder.replace(pass_number, f"pass_{i + 1}")
+            else:
+                new_output_folder = os.path.join(output_folder, f"pass_{i + 1}")
+            write_file(midi_file_path, new_output_folder, tokenized_sequence, aria_tokenizer)
 
-    # Write the generated sequences to a MIDI file
-    generated_sequence = [('prefix', 'instrument', 'piano'), "<S>"] + tokenized_sequence + ["<E>"]
-    mid_dict = aria_tokenizer.detokenize(generated_sequence)
-    generated_mid = mid_dict.to_midi()
-    filename = os.path.basename(midi_file_path)
-    generated_mid.save(os.path.join(output_folder, "generated_" + filename))
+    # Write the generated sequence to a MIDI file
+    write_file(midi_file_path, output_folder, tokenized_sequence, aria_tokenizer)
+
+    # # Unflatten the tokenized sequence
+    # tokenized_sequence = unflatten_for_aria(tokenized_sequence)
+
+    # # Filter out <N> tokens
+    # tokenized_sequence = [token for token in tokenized_sequence if token != "<N>"]
+
+    # # Write the generated sequences to a MIDI file
+    # generated_sequence = [('prefix', 'instrument', 'piano'), "<S>"] + tokenized_sequence + ["<E>"]
+    # mid_dict = aria_tokenizer.detokenize(generated_sequence)
+    # generated_mid = mid_dict.to_midi()
+    # filename = os.path.basename(midi_file_path)
+    # generated_mid.save(os.path.join(output_folder, "generated_" + filename))
 
 
 
@@ -260,4 +303,5 @@ if __name__ == "__main__":
 
     generate(midi_file_path, audio_file_path, fusion_model, configs, 
              t_segment_start, convert_to, context_before, context_after, 
-             corruption_passes, tokenizer, decode_tokenizer, output_folder, save_original=True, quiet=False)
+             corruption_passes, tokenizer, decode_tokenizer, output_folder, 
+             save_original=True, quiet=False, write_intermediate_passes=False)

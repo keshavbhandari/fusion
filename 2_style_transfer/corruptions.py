@@ -351,7 +351,7 @@ class DataCorruption:
                                 context_before: int = 5, context_after: int = 1, 
                                 meta_data: List = [], t_segment_ind: int = None,
                                 inference: bool = False, corruption_type: str = None,
-                                run_corruption: bool = True) -> Dict:
+                                run_corruption: bool = True, exclude_idx=[]) -> Dict:
         """
         Apply a random corruption function to a segment of the data.
         """
@@ -364,7 +364,7 @@ class DataCorruption:
         data_copy = copy.deepcopy(data)
         separated_sequence = self.seperateitems(data_copy)
         corruption_data = copy.deepcopy(separated_sequence)
-        all_segment_indices, index, segment, last_idx_flag = self.get_segment_to_corrupt(corruption_data, t_segment_ind=t_segment_ind, exclude_idx=[])
+        all_segment_indices, index, segment, last_idx_flag = self.get_segment_to_corrupt(corruption_data, t_segment_ind=t_segment_ind, exclude_idx=exclude_idx)
         segment_copy = copy.deepcopy(segment)
 
         if run_corruption:
