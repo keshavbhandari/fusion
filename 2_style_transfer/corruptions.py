@@ -6,7 +6,18 @@ from typing import List, Tuple, Union, Dict
 
 class DataCorruption:
     def __init__(self):
-        pass
+
+        self.corruption_functions = {
+            'pitch_velocity_mask': self.pitch_velocity_mask,
+            'onset_duration_mask': self.onset_duration_mask,
+            'whole_mask': self.whole_mask,
+            'permute_pitches': self.permute_pitches,
+            'permute_pitch_velocity': self.permute_pitch_velocity,
+            'fragmentation': self.fragmentation,
+            'incorrect_transposition': self.incorrect_transposition,
+            'skyline': self.skyline,
+            'note_modification': self.note_modification
+        }
 
     @staticmethod
     def read_data_from_file(file_path: str) -> List[Union[str, List[Union[str, int]]]]:
@@ -345,21 +356,10 @@ class DataCorruption:
         Apply a random corruption function to a segment of the data.
         """
 
-        corruption_functions = {
-            'pitch_velocity_mask': self.pitch_velocity_mask,
-            'onset_duration_mask': self.onset_duration_mask,
-            'whole_mask': self.whole_mask,
-            'permute_pitches': self.permute_pitches,
-            'permute_pitch_velocity': self.permute_pitch_velocity,
-            'fragmentation': self.fragmentation,
-            'incorrect_transposition': self.incorrect_transposition,
-            'skyline': self.skyline,
-            'note_modification': self.note_modification
-        }
         if corruption_type is not None and corruption_type != 'random':
-            corruption_function = corruption_functions[corruption_type]
+            corruption_function = self.corruption_functions[corruption_type]
         else:
-            corruption_function = random.choice(list(corruption_functions.values()))
+            corruption_function = random.choice(list(self.corruption_functions.values()))
 
         data_copy = copy.deepcopy(data)
         separated_sequence = self.seperateitems(data_copy)

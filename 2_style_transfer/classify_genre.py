@@ -11,43 +11,6 @@ from transformers import AutoModelForSequenceClassification
 from data_loader import Genre_Classifier_Dataset
 from corruptions import DataCorruption
 
-# Parse command line arguments
-parser = argparse.ArgumentParser()
-parser.add_argument("--config", type=str, default=os.path.normpath("configs/configs_style_transfer.yaml"),
-                    help="Path to the config file")
-args = parser.parse_args()
-
-# Load config file
-with open(args.config, 'r') as f:
-    configs = yaml.safe_load(f)
-    
-artifact_folder = configs["raw_data"]["artifact_folder"]
-raw_data_folders = configs["raw_data"]["raw_data_folders"]
-
-# Get the encoder max sequence length
-encoder_max_sequence_length = configs['classifier_model']['encoder_max_sequence_length']
-
-# Get tokenizer
-tokenizer_filepath = os.path.join(artifact_folder, "style_transfer", "vocab_corrupted.pkl")
-# Load the tokenizer dictionary
-with open(tokenizer_filepath, "rb") as f:
-    tokenizer = pickle.load(f)
-
-aria_tokenizer = AbsTokenizer()
-
-# Open the test set files
-with open(os.path.join(artifact_folder, "style_transfer", "fine_tuning_valid.pkl"), "rb") as f:
-    valid_sequences = pickle.load(f)
-
-# Load the model
-model_path = os.path.join(artifact_folder, "style_transfer", "classifier_model")
-model = AutoModelForSequenceClassification.from_pretrained(model_path)
-model.eval()
-print("Model loaded")
-
-# Load the dataset
-dataset_obj = Genre_Classifier_Dataset(configs, valid_sequences, mode="eval", shuffle=False)
-
 
 def get_genre_probabilities(midi_file_path, tokenizer, model, dataset_obj, encoder_max_sequence_length, aria_tokenizer):
     # Read a midi file
@@ -106,15 +69,56 @@ def get_genre_probabilities(midi_file_path, tokenizer, model, dataset_obj, encod
 
     return genre_probs
 
-# generated_midi_file_path = "/homes/kb658/fusion/output/generated_debussy-clair-de-lune.mid"
-# original_midi_file_path = "/homes/kb658/fusion/output/original_debussy-clair-de-lune.mid"
 
-generated_midi_file_path = "/homes/kb658/fusion/output/generated_schumann_kinderszenen_15_7_(c)harfesoft.mid"
-original_midi_file_path = "/homes/kb658/fusion/output/original_schumann_kinderszenen_15_7_(c)harfesoft.mid"
+if __name__ == "__main__":
 
-genre_probs = get_genre_probabilities(original_midi_file_path, tokenizer, model, dataset_obj, encoder_max_sequence_length, aria_tokenizer)
-genre_probs = get_genre_probabilities(generated_midi_file_path, tokenizer, model, dataset_obj, encoder_max_sequence_length, aria_tokenizer)
+    # Parse command line arguments
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--config", type=str, default=os.path.normpath("configs/configs_style_transfer.yaml"),
+                        help="Path to the config file")
+    args = parser.parse_args()
 
-# # Save the genre probabilities
-# with open("genre_probs.pkl", "wb") as f:
-#     pickle.dump(genre_probs, f)
+    # Load config file
+    with open(args.config, 'r') as f:
+        configs = yaml.safe_load(f)
+        
+    artifact_folder = configs["raw_data"]["artifact_folder"]
+    raw_data_folders = configs["raw_data"]["raw_data_folders"]
+
+    # Get the encoder max sequence length
+    encoder_max_sequence_length = configs['classifier_model']['encoder_max_sequence_length']
+
+    # Get tokenizer
+    tokenizer_filepath = os.path.join(artifact_folder, "style_transfer", "vocab_corrupted.pkl")
+    # Load the tokenizer dictionary
+    with open(tokenizer_filepath, "rb") as f:
+        tokenizer = pickle.load(f)
+
+    aria_tokenizer = AbsTokenizer()
+
+    # Open the test set files
+    with open(os.path.join(artifact_folder, "style_transfer", "fine_tuning_valid.pkl"), "rb") as f:
+        valid_sequences = pickle.load(f)
+
+    # Load the model
+    model_path = os.path.join(artifact_folder, "style_transfer", "classifier_model")
+    model = AutoModelForSequenceClassification.from_pretrained(model_path)
+    model.eval()
+    print("Model loaded")
+
+    # Load the dataset
+    dataset_obj = Genre_Classifier_Dataset(configs, valid_sequences, mode="eval", shuffle=False)
+
+
+    generated_midi_file_path = "/homes/kb658/fusion/output/generated_debussy-clair-de-lune.mid"
+    original_midi_file_path = "/homes/kb658/fusion/output/original_debussy-clair-de-lune.mid"
+
+    # generated_midi_file_path = "/homes/kb658/fusion/output/generated_schumann_kinderszenen_15_7_(c)harfesoft.mid"
+    # original_midi_file_path = "/homes/kb658/fusion/output/original_schumann_kinderszenen_15_7_(c)harfesoft.mid"
+
+    genre_probs = get_genre_probabilities(original_midi_file_path, tokenizer, model, dataset_obj, encoder_max_sequence_length, aria_tokenizer)
+    genre_probs = get_genre_probabilities(generated_midi_file_path, tokenizer, model, dataset_obj, encoder_max_sequence_length, aria_tokenizer)
+
+    # # Save the genre probabilities
+    # with open("genre_probs.pkl", "wb") as f:
+    #     pickle.dump(genre_probs, f)
