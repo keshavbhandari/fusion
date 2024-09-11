@@ -49,48 +49,61 @@ training:
 generation:
   convert_from: classical
   convert_to: jazz
-  # midi_file_path: "/homes/kb658/fusion/input/fur-elise.mid"
-  # wav_file_path: "/homes/kb658/fusion/input/fur-elise.wav"
+  midi_file_path: "/homes/kb658/fusion/input/alla_turca.mid"
+  wav_file_path: "/homes/kb658/fusion/input/alla_turca.wav"
   # midi_file_path: "/homes/kb658/fusion/input/debussy-clair-de-lune.mid"
   # wav_file_path: "/homes/kb658/fusion/input/debussy-clair-de-lune_original.wav"
   # midi_file_path: "input/schumann_kinderszenen_15_7_(c)harfesoft.mid"
   # wav_file_path: "input/schumann_kinderszenen_15_7_(c)harfesoft.wav"
-  midi_file_path: "/homes/kb658/fusion/evaluations/pop/92/original_92.mid"
-  wav_file_path: "/homes/kb658/fusion/evaluations/pop/92/original_92.wav"
+  # midi_file_path: "/homes/kb658/fusion/input/ravel_miroirs_3.mid"
+  # wav_file_path: "/homes/kb658/fusion/input/ravel_miroirs_3.wav"
   novel_peaks_pct: 0.05
-  context_before: 5 #5
-  context_after: 5 #5
+  context_before: 1
+  context_after: 1
   t_segment_start: 2
+  write_intermediate_passes: True
   passes:
     pass_1:
       corruption_rate: 0.5
       corruption_type: pitch_velocity_mask
     pass_2:
       corruption_rate: 0.5
-      corruption_type: onset_duration_mask
+      corruption_type: fragmentation
     pass_3:
       corruption_rate: 0.5
-      corruption_type: incorrect_transposition
+      corruption_type: fragmentation
     pass_4:
       corruption_rate: 0.5
       corruption_type: permute_pitch_velocity
     pass_5:
       corruption_rate: 0.5
-      corruption_type: note_modification
+      corruption_type: fragmentation
     pass_6:
-      corruption_rate: 1.0
-      corruption_type: onset_duration_mask
+      corruption_rate: 0.5
+      corruption_type: note_modification
     pass_7:
       corruption_rate: 0.5
-      corruption_type: fragmentation
-    # pass_8:
+      corruption_type: permute_pitches
+    pass_8:
+      corruption_rate: 0.5
+      corruption_type: pitch_velocity_mask
+    pass_9:
+      corruption_rate: 0.25
+      corruption_type: whole_mask
+    pass_10:
+      corruption_rate: 1.0
+      corruption_type: skyline
+    pass_11:
+      corruption_rate: 0.5
+      corruption_type: incorrect_transposition
+    # pass_12:
     #   corruption_rate: 0.5
-    #   corruption_type: permute_pitches
-    # pass_9:
+    #   corruption_type: incorrect_transposition
+    # pass_13:
     #   corruption_rate: 0.5
-    #   corruption_type: pitch_velocity_mask
-    # pass_10:
-    #   corruption_rate: 0.25
+    #   corruption_type: permute_pitch_velocity
+    # pass_14:
+    #   corruption_rate: 0.5
     #   corruption_type: whole_mask
 
 raw_data:

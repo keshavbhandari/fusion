@@ -406,7 +406,8 @@ def save_wav(filepath, soundfont_path="soundfont.sf"):
 
     return wav_filepath
 
-def convert_midi_to_wav(filepaths, soundfont_path, max_workers=32):
+
+def convert_midi_to_wav(filepaths, soundfont_path="../artifacts/soundfont.sf", max_workers=32):
     with ProcessPoolExecutor(max_workers=max_workers) as executor:
         # Use tqdm to track progress
         results = list(tqdm(executor.map(save_wav, filepaths, [soundfont_path]*len(filepaths)), total=len(filepaths), desc="Converting MIDI to WAV"))
