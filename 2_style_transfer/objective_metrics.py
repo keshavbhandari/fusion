@@ -8,9 +8,12 @@ from tqdm import tqdm
 import torch
 import torch.nn.functional as F
 import librosa
+import json
 import numpy as np
+import glob
 from sklearn.metrics import mean_squared_error
 from skimage.metrics import structural_similarity as ssim
+from sklearn.metrics.pairwise import cosine_similarity
 from scipy.stats import pearsonr
 from transformers import AutoProcessor, ClapModel
 from transformers import AutoModelForSequenceClassification
@@ -22,6 +25,10 @@ sys.path.append(os.path.dirname(SCRIPT_DIR))
 from utils.utils import convert_midi_to_wav
 
 def get_genre_probabilities(midi_file_path, tokenizer, model, dataset_obj, encoder_max_sequence_length, aria_tokenizer, verbose=True):
+    
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model = model.to(device)
+    
     # Read a midi file
     mid = MidiDict.from_midi(midi_file_path)
     # Tokenize the midi file
@@ -37,7 +44,8 @@ def get_genre_probabilities(midi_file_path, tokenizer, model, dataset_obj, encod
     n_iterations = len(all_segment_indices) - 1
     jump_every = 1
     # Initialize tqdm
-    progress_bar = tqdm(total=n_iterations)
+    disable = True if not verbose else False
+    progress_bar = tqdm(total=n_iterations, disable=disable)
     genre_probs = {'classical': [], 'pop': [], 'jazz': []}
 
     while t_segment_ind < n_iterations:
@@ -56,13 +64,16 @@ def get_genre_probabilities(midi_file_path, tokenizer, model, dataset_obj, encod
         # Attention mask based on non-padded tokens of the phrase
         attention_mask = torch.where(input_tokens != 0, 1, 0).type(torch.bool)
 
+        # Move the tensors to the device
+        input_tokens = input_tokens.to(device)
+        attention_mask = attention_mask.to(device)
+
         # Get the prediction
         outputs = model(input_tokens.unsqueeze(0), attention_mask=attention_mask.unsqueeze(0))
         logits = outputs.logits
         # Get probabilities from the logits
         probs = F.softmax(logits, dim=1)
         genre_probs['classical'].append(probs[0][0].item())
-        genre_probs['pop'].append(probs[0][1].item())
         genre_probs['jazz'].append(probs[0][2].item())
 
         t_segment_ind += jump_every
@@ -74,31 +85,41 @@ def get_genre_probabilities(midi_file_path, tokenizer, model, dataset_obj, encod
     if verbose:
         # Print average probabilities by genre
         print(f"Average probability for classical: {sum(genre_probs['classical'])/len(genre_probs['classical'])}")
-        print(f"Average probability for pop: {sum(genre_probs['pop'])/len(genre_probs['pop'])}")
         print(f"Average probability for jazz: {sum(genre_probs['jazz'])/len(genre_probs['jazz'])}")
 
-    return genre_probs
+    avg_classical_prob = float(sum(genre_probs['classical'])/len(genre_probs['classical']))
+    avg_jazz_prob = float(sum(genre_probs['jazz'])/len(genre_probs['jazz']))
+
+    return {'Jazz': avg_jazz_prob, 'Classical': avg_classical_prob}
 
 
 def generate_ssm(wav_file):
-
-    y, sr = librosa.load(wav_file, sr=None, mono=True)
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    # Load the audio file and take the first n minutes to fit into memory
+    y, sr = librosa.load(wav_file, duration=60*5, sr=None, mono=True)
 
     # Duration of the audio file in minutes and seconds
     duration = librosa.get_duration(y=y, sr=sr)
     duration = f"{int(duration // 60)} minutes and {int(duration % 60)} seconds"
 
     #### Chromagram using librosa ####
-    chroma = librosa.feature.chroma_cqt(y=y, sr=sr)
+    chroma_cqt = librosa.feature.chroma_cqt(y=y, sr=sr, hop_length=1024)
+
+    # Chromagram for shorter audio file
+    shorter_samples = sr * 60 * 5 # First n minutes to fit into memory
+    if len(y) > shorter_samples:    
+        # Slice the audio signal to get the first 5 minutes
+        y_short = y[:shorter_samples]
+        chroma_cqt_short = librosa.feature.chroma_cqt(y=y_short, sr=sr, hop_length=1024)
+    else:
+        chroma_cqt_short = chroma_cqt
 
     ## norm of chroma ##
-    nrow, ncol = chroma.shape
-    resolution = len(y) / nrow / sr
-    chroma_norm = np.linalg.norm(chroma, axis=0)
+    chroma_norm = np.linalg.norm(chroma_cqt_short, axis=0)
 
     # Convert to torch tensor
-    chroma = torch.from_numpy(chroma).float().cuda()
-    chroma_norm = torch.from_numpy(chroma_norm).float().cuda()
+    chroma = torch.from_numpy(chroma_cqt_short).float().to(device)
+    chroma_norm = torch.from_numpy(chroma_norm).float().to(device)
 
     # Compute dot products
     dot_products = torch.matmul(chroma.T, chroma)
@@ -118,13 +139,13 @@ def generate_ssm(wav_file):
     # Rescale ssm_normalized
     ssm_rescaled = F.interpolate(ssm_flipped.unsqueeze(0).unsqueeze(0), size=(512, 512), mode='bilinear').squeeze().cpu().numpy()
 
-    return ssm_rescaled, duration
+    return ssm_rescaled, chroma_cqt
 
 
-def compare_similarity_matrices(original_wav_file, generated_wav_file):
+def compare_similarity_matrices(original_wav_file, generated_wav_file, verbose=True):
     # Generate the similarity matrices
-    original_ssm, original_duration = generate_ssm(original_wav_file)
-    generated_ssm, generated_duration = generate_ssm(generated_wav_file)
+    original_ssm, original_chroma_cqt = generate_ssm(original_wav_file)
+    generated_ssm, generated_chroma_cqt = generate_ssm(generated_wav_file)
 
     # Ensure the matrices are numpy arrays
     original_ssm = np.array(original_ssm)
@@ -135,46 +156,42 @@ def compare_similarity_matrices(original_wav_file, generated_wav_file):
         raise ValueError("Matrices must have the same dimensions")
 
     # Calculate Mean Squared Error (MSE)
-    mse_value = mean_squared_error(original_ssm, generated_ssm)
+    mse_value = float(mean_squared_error(original_ssm, generated_ssm))
 
     # Calculate Structural Similarity Index (SSIM)
-    ssim_value = ssim(original_ssm, generated_ssm, data_range=generated_ssm.max() - generated_ssm.min())
+    ssim_value = float(ssim(original_ssm, generated_ssm, data_range=generated_ssm.max() - generated_ssm.min()))
 
     # Calculate Pearson Correlation Coefficient
     pearson_corr, _ = pearsonr(original_ssm.flatten(), generated_ssm.flatten())
+    pearson_corr = float(pearson_corr)
 
     # Calculate Frobenius Norm
-    frobenius_norm = np.linalg.norm(original_ssm - generated_ssm, 'fro')
+    frobenius_norm = float(np.linalg.norm(original_ssm - generated_ssm, 'fro'))
 
-    print(f"Mean Squared Error: {mse_value}")
-    print(f"SSIM: {ssim_value}")
-    print(f"Pearson Correlation: {pearson_corr}")
-    print(f"Frobenius Norm: {frobenius_norm}")
+    # Calculate Cosine Similarity
+    cosine_sim = cosine_similarity(original_ssm.flatten().reshape(1, -1), generated_ssm.flatten().reshape(1, -1))
+    cosine_sim = float(cosine_sim[0][0])
+
+    # Calculate Chroma Cosine Similarity
+    chroma_similarity = cosine_similarity(original_chroma_cqt.T, generated_chroma_cqt.T)
+    # Averaged similarity across all time frames
+    avg_chroma_similarity = float(np.mean(chroma_similarity))
+
+    if verbose:
+        print(f"SSM Mean Squared Error: {mse_value}")
+        print(f"SSM SSIM: {ssim_value}")
+        print(f"SSM Pearson Correlation: {pearson_corr}")
+        print(f"SSM Frobenius Norm: {frobenius_norm}")
+        print(f"SSM Cosine Similarity: {cosine_sim}")
+        print(f"Average Chroma Cosine Similarity: {avg_chroma_similarity}")
 
     return {
-        'MSE': mse_value,
-        'SSIM': ssim_value,
-        'Pearson Correlation': pearson_corr,
-        'Frobenius Norm': frobenius_norm
-    }
-
-
-def compare_dtw_chroma(original_wav_file, generated_wav_file, hop_length = 1024):
-    x_1, fs = librosa.load(original_wav_file)
-    x_2, fs = librosa.load(generated_wav_file)
-    x_1_chroma = librosa.feature.chroma_cqt(y=x_1, sr=fs,
-                                         hop_length=hop_length)
-    x_2_chroma = librosa.feature.chroma_cqt(y=x_2, sr=fs,
-                                         hop_length=hop_length)
-    
-    D, wp = librosa.sequence.dtw(X=x_1_chroma, Y=x_2_chroma, metric='cosine')
-    wp_s = librosa.frames_to_time(wp, sr=fs, hop_length=hop_length)
-
-    dtw_cost = D[-1, -1]  # The final cost is at the bottom-right corner of the cost matrix
-
-    print(f"DTW cost: {dtw_cost}")
-
-    return dtw_cost
+        'SSM MSE': mse_value,
+        'SSM SSIM': ssim_value,
+        'SSM Pearson Correlation': pearson_corr,
+        'SSM Frobenius Norm': frobenius_norm,
+        'SSM Cosine Similarity': cosine_sim,
+    }, avg_chroma_similarity
 
 
 def clap_similarity_score(audio_sample, text, model, processor):
@@ -196,7 +213,7 @@ def clap_similarity_score(audio_sample, text, model, processor):
     return similarity_score
 
 
-def compare_clap_similarity_score(wav_filepath, model, processor):
+def compare_clap_similarity_score(wav_filepath, model, processor, verbose=True):
     audio_sample, sr = librosa.load(wav_filepath, sr=48000, mono=True)
     total_duration = audio_sample.shape[0] / sr
 
@@ -205,7 +222,8 @@ def compare_clap_similarity_score(wav_filepath, model, processor):
 
     classical_similarity_scores = []
     jazz_similarity_scores = []
-    for i in tqdm(range(0, int(total_duration / segment_duration)), desc="Processing segments", disable=False):
+    disable = True if not verbose else False
+    for i in tqdm(range(0, int(total_duration / segment_duration)), desc="Processing segments", disable=disable):
         start_sample = i * segment_samples
         end_sample = start_sample + segment_samples
 
@@ -217,12 +235,18 @@ def compare_clap_similarity_score(wav_filepath, model, processor):
         jazz_similarity_scores.append(jazz_similarity_score)
     
     # Average the similarity score values with numpy
-    classical_similarity_scores = np.mean(torch.cat(classical_similarity_scores).detach().numpy())
-    jazz_similarity_scores = np.mean(torch.cat(jazz_similarity_scores).detach().numpy())
-    print(f"Average similarity score for classical music: {classical_similarity_scores}")
-    print(f"Average similarity score for jazz music: {jazz_similarity_scores}")
+    classical_similarity_scores = float(np.mean(torch.cat(classical_similarity_scores).detach().numpy()))
+    jazz_similarity_scores = float(np.mean(torch.cat(jazz_similarity_scores).detach().numpy()))
+    if verbose:
+        print(f"Average similarity score for classical music: {classical_similarity_scores}")
+        print(f"Average similarity score for jazz music: {jazz_similarity_scores}")
 
-    return classical_similarity_scores, jazz_similarity_scores
+    clap_scores = {
+        "Classical Similarity Score": classical_similarity_scores,
+        "Jazz Similarity Score": jazz_similarity_scores
+    }
+
+    return clap_scores
         
     
 
@@ -242,6 +266,7 @@ if __name__ == "__main__":
         
     artifact_folder = configs["raw_data"]["artifact_folder"]
     raw_data_folders = configs["raw_data"]["raw_data_folders"]
+    eval_folder = configs["raw_data"]["eval_folder"]
 
     # Get the encoder max sequence length
     encoder_max_sequence_length = configs['classifier_model']['encoder_max_sequence_length']
@@ -254,9 +279,9 @@ if __name__ == "__main__":
 
     aria_tokenizer = AbsTokenizer()
 
-    # Open the test set files
-    with open(os.path.join(artifact_folder, "style_transfer", "fine_tuning_valid.pkl"), "rb") as f:
-        valid_sequences = pickle.load(f)
+    # # Open the test set files
+    # with open(os.path.join(artifact_folder, "style_transfer", "fine_tuning_valid.pkl"), "rb") as f:
+    #     valid_sequences = pickle.load(f)
 
     # Load the model
     model_path = os.path.join(artifact_folder, "style_transfer", "classifier_model")
@@ -270,32 +295,61 @@ if __name__ == "__main__":
     print("CLAP model loaded")
 
     # Load the dataset
-    dataset_obj = Genre_Classifier_Dataset(configs, valid_sequences, mode="eval", shuffle=False)
+    dataset_obj = Genre_Classifier_Dataset(configs, data_list=[], mode="eval", shuffle=False)
 
-    original_midi_file_path = "/homes/kb658/fusion/evaluations/classical/19/original_19.mid"
-    generated_midi_file_path = "/homes/kb658/fusion/evaluations/classical/19/experiment_2/target_style_jazz/corruption_name_skyline/corruption_rate_1.0/pass_10/generated_original_19.mid"
+    # Get file paths of the original and generated midi files from eval_folder
+    all_midi_files = glob.glob(os.path.join(eval_folder, "**/*.mid"), recursive=True)
+    original_midi_file_paths = [f for f in all_midi_files if "generated" not in f and "pop" not in f]
+    # Filter out all files from 0 until the specified file
+    # filter_until = "evaluations/jazz/32/original_32.mid"
+    # original_midi_file_paths = original_midi_file_paths[original_midi_file_paths.index(filter_until):]
+    generated_midi_file_paths = [f for f in all_midi_files if "generated" in f and "pop" not in f]
 
-    origianl_genre_probs = get_genre_probabilities(original_midi_file_path, tokenizer, model, dataset_obj, encoder_max_sequence_length, aria_tokenizer, verbose=True)
-    generated_genre_probs = get_genre_probabilities(generated_midi_file_path, tokenizer, model, dataset_obj, encoder_max_sequence_length, aria_tokenizer, verbose=True)
+    for original_midi_file_path in original_midi_file_paths:
+        matching_generation_file_paths = [f for f in generated_midi_file_paths if os.path.join(os.path.dirname(original_midi_file_path), "experiment_") in f]
+        for generated_midi_file_path in tqdm(matching_generation_file_paths):
 
-    # Convert the midi files to wav
-    original_wav_file = original_midi_file_path.replace(".mid", ".wav")
-    generated_wav_file = convert_midi_to_wav([generated_midi_file_path], "/homes/kb658/fusion/artifacts/soundfont.sf", 1)
-    generated_wav_file = generated_wav_file[0]
+            # generated_midi_file_path = "/homes/kb658/fusion/evaluations/jazz/32/experiment_1/target_style_classical/corruption_name_whole_mask/corruption_rate_1.0/pass_7/generated_original_32.mid"
+            # original_midi_file_path = "/homes/kb658/fusion/evaluations/jazz/32/original_32.mid"
 
-    # Get the similarity matrices
-    ssm_scores = compare_similarity_matrices(original_wav_file, generated_wav_file)
+            generated_midi_folder = os.path.dirname(generated_midi_file_path)
+            print("Processing: ", generated_midi_file_path)
 
-    # Get the DTW cost
-    dtw_cost = compare_dtw_chroma(original_wav_file, generated_wav_file)
+            original_genre_probs = get_genre_probabilities(original_midi_file_path, tokenizer, model, dataset_obj, encoder_max_sequence_length, aria_tokenizer, verbose=False)
+            generated_genre_probs = get_genre_probabilities(generated_midi_file_path, tokenizer, model, dataset_obj, encoder_max_sequence_length, aria_tokenizer, verbose=False)
 
-    # Get the CLAP similarity scores
-    original_clap_scores = compare_clap_similarity_score(original_wav_file, clap_model, processor)
-    generated_clap_scores = compare_clap_similarity_score(generated_wav_file, clap_model, processor)
+            # Convert the midi files to wav
+            original_wav_file = original_midi_file_path.replace(".mid", ".wav")
+            generated_wav_file = convert_midi_to_wav([generated_midi_file_path], "/homes/kb658/fusion/artifacts/soundfont.sf", max_workers=1, verbose=False)
+            generated_wav_file = generated_wav_file[0]
 
-    # Delete the generated wav file
-    os.remove(generated_wav_file)
+            # Get the similarity matrices
+            try:
+                ssm_score, chroma_score = compare_similarity_matrices(original_wav_file, generated_wav_file, verbose=False)
+            except Exception as e:
+                ssm_score, chroma_score = None, None
 
-    # # Save the genre probabilities
-    # with open("genre_probs.pkl", "wb") as f:
-    #     pickle.dump(genre_probs, f)
+            # Get the CLAP similarity scores
+            original_clap_score = compare_clap_similarity_score(original_wav_file, clap_model, processor, verbose=False)
+            generated_clap_score = compare_clap_similarity_score(generated_wav_file, clap_model, processor, verbose=False)
+
+            metrics = {
+                "Original Genre Probabilities": original_genre_probs,
+                "Generated Genre Probabilities": generated_genre_probs,
+                "SSM Similarity Score": ssm_score,
+                "Chroma Frame Similarity Score": chroma_score,
+                "Original CLAP Score": original_clap_score,
+                "Generated CLAP Score": generated_clap_score
+            }
+
+            # Save the metrics as a JSON file
+            with open(os.path.join(generated_midi_folder, "metrics.json"), "w") as f:
+                json.dump(metrics, f)
+
+            # Delete the generated wav file
+            os.remove(generated_wav_file)
+
+            # Clear GPU memory
+            torch.cuda.empty_cache()
+
+    print("Evaluation completed")

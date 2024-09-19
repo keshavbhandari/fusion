@@ -64,7 +64,7 @@ with open(os.path.join(artifact_folder, "style_transfer", "fine_tuning_valid.pkl
     valid_sequences = pickle.load(f)
 
 # Create new directory if it does not exist
-eval_folder = os.path.join("evaluations")
+eval_folder = configs["raw_data"]["eval_folder"]
 if not os.path.exists(eval_folder):
     os.makedirs(eval_folder)
 
@@ -180,11 +180,11 @@ if __name__ == '__main__':
     # fusion_model.share_memory()
 
     if args.experiment_name == "experiment_1" or args.experiment_name == "all":
-        # ################ Experiment 1: Single Pass with Specific Corruptions ################
+        # ################ Experiment 1: Multiple Passes over different corruption rates with specific corruptions ################
         data_corruption_obj = DataCorruption()
         corruptions = data_corruption_obj.corruption_functions
         corruptions["random"] = None
-        corruption_rates = [1.0]
+        corruption_rates = [1.0, 0.75, 0.5, 0.25]
         n_passes = [10]
         context = [5]
         t_segment_start = 2
@@ -192,7 +192,27 @@ if __name__ == '__main__':
         convert_to = "jazz"
         experiment_name = "experiment_1"
         write_intermediate_passes = True
-        max_processes_per_gpu = 4  # Limit to n processes per GPU
+        max_processes_per_gpu = 4
+
+        # Example usage:
+        filtered_midi_file_paths = [file for file in original_midi_file_paths if convert_to not in file and "generated" not in file and "pop" not in file]
+        print(f"Number of files to process: {len(filtered_midi_file_paths)}")
+        run_evaluation(filtered_midi_file_paths, convert_to, context, t_segment_start, 
+                    corruptions, corruption_rates, n_passes, fusion_model, configs, novel_peaks_pct, tokenizer, decode_tokenizer, 
+                    experiment_name, max_processes_per_gpu, write_intermediate_passes=write_intermediate_passes)
+
+        data_corruption_obj = DataCorruption()
+        corruptions = data_corruption_obj.corruption_functions
+        corruptions["random"] = None
+        corruption_rates = [1.0, 0.75, 0.5, 0.25]
+        n_passes = [10]
+        context = [5]
+        t_segment_start = 2
+        novel_peaks_pct = 0.05
+        convert_to = "classical"
+        experiment_name = "experiment_1"
+        write_intermediate_passes = True
+        max_processes_per_gpu = 4
 
         # Example usage:
         filtered_midi_file_paths = [file for file in original_midi_file_paths if convert_to not in file and "generated" not in file and "pop" not in file]
@@ -201,35 +221,15 @@ if __name__ == '__main__':
                     corruptions, corruption_rates, n_passes, fusion_model, configs, novel_peaks_pct, tokenizer, decode_tokenizer, 
                     experiment_name, max_processes_per_gpu, write_intermediate_passes=write_intermediate_passes)
         
-
-        data_corruption_obj = DataCorruption()
-        corruptions = data_corruption_obj.corruption_functions
-        corruptions["random"] = None
-        corruption_rates = [1.0]
-        n_passes = [10]
-        context = [5]
-        t_segment_start = 2
-        novel_peaks_pct = 0.05
-        convert_to = "classical"
-        experiment_name = "experiment_1"
-        write_intermediate_passes = True
-        max_processes_per_gpu = 4  # Limit to n processes per GPU
-
-        # Example usage:
-        filtered_midi_file_paths = [file for file in original_midi_file_paths if convert_to not in file and "generated" not in file and "pop" not in file]
-        print(f"Number of files to process: {len(filtered_midi_file_paths)}")
-        run_evaluation(filtered_midi_file_paths, convert_to, context, t_segment_start, 
-                    corruptions, corruption_rates, n_passes, fusion_model, configs, novel_peaks_pct, tokenizer, decode_tokenizer, 
-                    experiment_name, max_processes_per_gpu, write_intermediate_passes=write_intermediate_passes)
 
     if args.experiment_name == "experiment_2" or args.experiment_name == "all":
-        # ################ Experiment 2: Multiple Passes over different corruption rates with specific corruptions ################
+        # ################ Experiment 2: Multiple Passes over different contexts with random corruptions ################
         data_corruption_obj = DataCorruption()
-        corruptions = data_corruption_obj.corruption_functions
+        corruptions = dict()
         corruptions["random"] = None
-        corruption_rates = [1.0, 0.75, 0.5, 0.25]
+        corruption_rates = [1.0]
         n_passes = [10]
-        context = [5]
+        context = [5,4,3,2,1]
         t_segment_start = 2
         novel_peaks_pct = 0.05
         convert_to = "jazz"
@@ -245,11 +245,11 @@ if __name__ == '__main__':
                     experiment_name, max_processes_per_gpu, write_intermediate_passes=write_intermediate_passes)
 
         data_corruption_obj = DataCorruption()
-        corruptions = data_corruption_obj.corruption_functions
+        corruptions = dict()
         corruptions["random"] = None
-        corruption_rates = [1.0, 0.75, 0.5, 0.25]
+        corruption_rates = [1.0]
         n_passes = [10]
-        context = [5]
+        context = [5,4,3,2,1]
         t_segment_start = 2
         novel_peaks_pct = 0.05
         convert_to = "classical"
@@ -264,15 +264,14 @@ if __name__ == '__main__':
                     corruptions, corruption_rates, n_passes, fusion_model, configs, novel_peaks_pct, tokenizer, decode_tokenizer, 
                     experiment_name, max_processes_per_gpu, write_intermediate_passes=write_intermediate_passes)
         
-
     if args.experiment_name == "experiment_3" or args.experiment_name == "all":
-        # ################ Experiment 3: Multiple Passes over different contexts with random corruptions ################
+        # ################ Experiment 3: Variations. Multiple Passes over different corruption rates with specific corruptions ################
         data_corruption_obj = DataCorruption()
-        corruptions = dict()
+        corruptions = data_corruption_obj.corruption_functions
         corruptions["random"] = None
-        corruption_rates = [1.0]
+        corruption_rates = [1.0, 0.75, 0.5, 0.25]
         n_passes = [10]
-        context = [5,4,3,2,1]
+        context = [5]
         t_segment_start = 2
         novel_peaks_pct = 0.05
         convert_to = "jazz"
@@ -281,7 +280,49 @@ if __name__ == '__main__':
         max_processes_per_gpu = 4
 
         # Example usage:
-        filtered_midi_file_paths = [file for file in original_midi_file_paths if convert_to not in file and "generated" not in file and "pop" not in file]
+        filtered_midi_file_paths = [file for file in original_midi_file_paths if convert_to in file and "generated" not in file and "pop" not in file]
+        print(f"Number of files to process: {len(filtered_midi_file_paths)}")
+        run_evaluation(filtered_midi_file_paths, convert_to, context, t_segment_start, 
+                    corruptions, corruption_rates, n_passes, fusion_model, configs, novel_peaks_pct, tokenizer, decode_tokenizer, 
+                    experiment_name, max_processes_per_gpu, write_intermediate_passes=write_intermediate_passes)
+
+        data_corruption_obj = DataCorruption()
+        corruptions = data_corruption_obj.corruption_functions
+        corruptions["random"] = None
+        corruption_rates = [1.0, 0.75, 0.5, 0.25]
+        n_passes = [10]
+        context = [5]
+        t_segment_start = 2
+        novel_peaks_pct = 0.05
+        convert_to = "classical"
+        experiment_name = "experiment_3"
+        write_intermediate_passes = True
+        max_processes_per_gpu = 4
+
+        # Example usage:
+        filtered_midi_file_paths = [file for file in original_midi_file_paths if convert_to in file and "generated" not in file and "pop" not in file]
+        print(f"Number of files to process: {len(filtered_midi_file_paths)}")
+        run_evaluation(filtered_midi_file_paths, convert_to, context, t_segment_start, 
+                    corruptions, corruption_rates, n_passes, fusion_model, configs, novel_peaks_pct, tokenizer, decode_tokenizer, 
+                    experiment_name, max_processes_per_gpu, write_intermediate_passes=write_intermediate_passes)
+    
+    if args.experiment_name == "experiment_4" or args.experiment_name == "all":
+        # ################ Experiment 4: Variations. Multiple Passes over different contexts with random corruptions ################
+        data_corruption_obj = DataCorruption()
+        corruptions = dict()
+        corruptions["random"] = None
+        corruption_rates = [1.0]
+        n_passes = [10]
+        context = [4, 3, 2, 1]
+        t_segment_start = 2
+        novel_peaks_pct = 0.05
+        convert_to = "jazz"
+        experiment_name = "experiment_4"
+        write_intermediate_passes = True
+        max_processes_per_gpu = 4
+
+        # Example usage:
+        filtered_midi_file_paths = [file for file in original_midi_file_paths if convert_to in file and "generated" not in file and "pop" not in file]
         print(f"Number of files to process: {len(filtered_midi_file_paths)}")
         run_evaluation(filtered_midi_file_paths, convert_to, context, t_segment_start, 
                     corruptions, corruption_rates, n_passes, fusion_model, configs, novel_peaks_pct, tokenizer, decode_tokenizer, 
@@ -296,12 +337,12 @@ if __name__ == '__main__':
         t_segment_start = 2
         novel_peaks_pct = 0.05
         convert_to = "classical"
-        experiment_name = "experiment_3"
+        experiment_name = "experiment_4"
         write_intermediate_passes = True
         max_processes_per_gpu = 4
 
         # Example usage:
-        filtered_midi_file_paths = [file for file in original_midi_file_paths if convert_to not in file and "generated" not in file and "pop" not in file]
+        filtered_midi_file_paths = [file for file in original_midi_file_paths if convert_to in file and "generated" not in file and "pop" not in file]
         print(f"Number of files to process: {len(filtered_midi_file_paths)}")
         run_evaluation(filtered_midi_file_paths, convert_to, context, t_segment_start, 
                     corruptions, corruption_rates, n_passes, fusion_model, configs, novel_peaks_pct, tokenizer, decode_tokenizer, 

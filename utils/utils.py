@@ -407,10 +407,14 @@ def save_wav(filepath, soundfont_path="soundfont.sf"):
     return wav_filepath
 
 
-def convert_midi_to_wav(filepaths, soundfont_path="../artifacts/soundfont.sf", max_workers=32):
-    with ProcessPoolExecutor(max_workers=max_workers) as executor:
-        # Use tqdm to track progress
-        results = list(tqdm(executor.map(save_wav, filepaths, [soundfont_path]*len(filepaths)), total=len(filepaths), desc="Converting MIDI to WAV"))
+def convert_midi_to_wav(filepaths, soundfont_path="../artifacts/soundfont.sf", max_workers=32, verbose=True):
+    if verbose:
+        with ProcessPoolExecutor(max_workers=max_workers) as executor:
+            # Use tqdm to track progress
+            results = list(tqdm(executor.map(save_wav, filepaths, [soundfont_path]*len(filepaths)), total=len(filepaths), desc="Converting MIDI to WAV"))
+    else:
+        with ProcessPoolExecutor(max_workers=max_workers) as executor:
+            results = list(executor.map(save_wav, filepaths, [soundfont_path]*len(filepaths)))
     return results
 
 # # Find all notes which have the same onset time before n notes and print the average ratio of same note onsets
