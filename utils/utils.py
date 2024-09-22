@@ -4,9 +4,12 @@ import random
 import copy
 import numpy as np
 import miditoolkit
-# from music21 import stream, meter, note, metadata, tempo, converter, instrument, chord, key
 import pandas as pd
 import yaml
+import os
+from tqdm import tqdm
+import subprocess
+from concurrent.futures import ProcessPoolExecutor
 from ssmnet.core import SsmNetDeploy
 
 
@@ -383,6 +386,47 @@ def interleave_conditions(flattened_sequence, cfr_list, cd_list):
         conditioned_flattened_sequence.append(cd_list.pop(0))
 
     return conditioned_flattened_sequence
+
+
+def save_wav(filepath, soundfont_path="soundfont.sf"):
+    # Extract the directory and the stem (filename without extension)
+    directory = os.path.dirname(filepath)
+    stem = os.path.splitext(os.path.basename(filepath))[0]
+
+    # Construct the full paths for MIDI and WAV files
+    midi_filepath = os.path.join(directory, f"{stem}.mid")
+    wav_filepath = os.path.join(directory, f"{stem}.wav")
+
+    # Run the fluidsynth command to convert MIDI to WAV
+    process = subprocess.Popen(
+        f"fluidsynth -r 48000 {soundfont_path} -g 1.0 --quiet --no-shell {midi_filepath} -T wav -F {wav_filepath} > /dev/null",
+        shell=True
+    )
+    # -o synth.cpu-cores=6
+    process.wait()
+
+    return wav_filepath
+
+
+def convert_midi_to_wav(filepaths, soundfont_path="../artifacts/soundfont.sf", max_workers=32, verbose=True):
+    if verbose:
+        if max_workers == 1:
+            results = []
+            for filepath in tqdm(filepaths, desc="Converting MIDI to WAV"):
+                results.append(save_wav(filepath, soundfont_path))
+        else:
+            with ProcessPoolExecutor(max_workers=max_workers) as executor:
+                # Use tqdm to track progress
+                results = list(tqdm(executor.map(save_wav, filepaths, [soundfont_path]*len(filepaths)), total=len(filepaths), desc="Converting MIDI to WAV"))
+    else:
+        if max_workers == 1:
+            results = []
+            for filepath in filepaths:
+                results.append(save_wav(filepath, soundfont_path))
+        else:
+            with ProcessPoolExecutor(max_workers=max_workers) as executor:
+                results = list(executor.map(save_wav, filepaths, [soundfont_path]*len(filepaths)))
+    return results
 
 # # Find all notes which have the same onset time before n notes and print the average ratio of same note onsets
 # def chord_density_ratio(flattened_sequence):

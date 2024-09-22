@@ -2,5 +2,8 @@
 *.cache
 __pycache__/
 *.pyc
-artifacts/fusion/
-output/*.mid
+artifacts/*
+input/*
+output/*
+data/*
+evaluations/*

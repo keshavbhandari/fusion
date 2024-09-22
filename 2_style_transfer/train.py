@@ -12,7 +12,9 @@ from evaluate import load as load_metric
 from data_loader import Fusion_Dataset
 import sys
 import argparse
+from accelerate import Accelerator
 
+accelerator = Accelerator()
 
 # Parse command line arguments
 parser = argparse.ArgumentParser()
@@ -24,28 +26,27 @@ args = parser.parse_args()
 with open(args.config, 'r') as f:
     configs = yaml.safe_load(f)
 
-batch_size = configs['training']['fusion']['batch_size']
-learning_rate = configs['training']['fusion']['learning_rate']
-epochs = configs['training']['fusion']['epochs']
-
 # Artifact folder
 artifact_folder = configs['raw_data']['artifact_folder']
 # Load encoder tokenizer json file dictionary
-tokenizer_filepath = os.path.join(artifact_folder, "fusion", "vocab_corrupted.pkl")
+tokenizer_filepath = os.path.join(artifact_folder, "style_transfer", "vocab_corrupted.pkl")
 # Load the tokenizer dictionary
 with open(tokenizer_filepath, "rb") as f:
     tokenizer = pickle.load(f)
 
-    
-# Open the train, validation, and test sets files
-with open(os.path.join(artifact_folder, "fusion", "train.pkl"), "rb") as f:
-    train_sequences = pickle.load(f)
-with open(os.path.join(artifact_folder, "fusion", "valid.pkl"), "rb") as f:
-    valid_sequences = pickle.load(f)
-# with open(os.path.join(artifact_folder, "fusion", "train.json"), "r") as f:
-#     train_sequences = json.load(f)
-# with open(os.path.join(artifact_folder, "fusion", "valid.json"), "r") as f:
-#     valid_sequences = json.load(f)
+run_pretraining = configs['training']['pretraining']['run_pretraining']  
+if run_pretraining:
+    # Open the train, validation, and test sets files
+    with open(os.path.join(artifact_folder, "style_transfer", "pre_training_train.pkl"), "rb") as f:
+        train_sequences = pickle.load(f)
+    with open(os.path.join(artifact_folder, "style_transfer", "pre_training_valid.pkl"), "rb") as f:
+        valid_sequences = pickle.load(f)
+else:
+    # Open the train, validation, and test sets files
+    with open(os.path.join(artifact_folder, "style_transfer", "fine_tuning_train.pkl"), "rb") as f:
+        train_sequences = pickle.load(f)
+    with open(os.path.join(artifact_folder, "style_transfer", "fine_tuning_valid.pkl"), "rb") as f:
+        valid_sequences = pickle.load(f)
 
 # Print length of train, validation, and test sets
 print("Length of train set: ", len(train_sequences))
@@ -57,33 +58,34 @@ valid_dataset = Fusion_Dataset(configs, valid_sequences, mode="eval")
 
 # Get the vocab size
 vocab_size = len(tokenizer)+1
+print(f"Vocab size: {vocab_size}")
 # Get the data length
 train_length = len(train_dataset.data_list)
 
 # Create the encoder-decoder model
 config_encoder = BertConfig()
 config_encoder.vocab_size = vocab_size
-config_encoder.max_position_embeddings = configs['model']['fusion_model']['encoder_max_sequence_length']
-config_encoder.max_length = configs['model']['fusion_model']['encoder_max_sequence_length']
+config_encoder.max_position_embeddings = configs['model']['encoder_max_sequence_length']
+config_encoder.max_length = configs['model']['encoder_max_sequence_length']
 config_encoder.pad_token_id = 0
 config_encoder.bos_token_id = tokenizer["<S>"]
 config_encoder.eos_token_id = tokenizer["<E>"]
-config_encoder.num_hidden_layers = configs['model']['fusion_model']['encoder_num_layers']
-config_encoder.num_attention_heads = configs['model']['fusion_model']['encoder_num_heads']
-config_encoder.hidden_size = configs['model']['fusion_model']['encoder_hidden_size']
-config_encoder.intermediate_size = configs['model']['fusion_model']['encoder_intermediate_size']
+config_encoder.num_hidden_layers = configs['model']['encoder_num_layers']
+config_encoder.num_attention_heads = configs['model']['encoder_num_heads']
+config_encoder.hidden_size = configs['model']['encoder_hidden_size']
+config_encoder.intermediate_size = configs['model']['encoder_intermediate_size']
 
 config_decoder = BertConfig()
 config_decoder.vocab_size = vocab_size
-config_decoder.max_position_embeddings = configs['model']['fusion_model']['decoder_max_sequence_length']
-config_decoder.max_length = configs['model']['fusion_model']['decoder_max_sequence_length']
+config_decoder.max_position_embeddings = configs['model']['decoder_max_sequence_length']
+config_decoder.max_length = configs['model']['decoder_max_sequence_length']
 config_decoder.bos_token_id = tokenizer["<S>"]
 config_decoder.eos_token_id = tokenizer["<E>"]
 config_decoder.pad_token_id = 0
-config_decoder.num_hidden_layers = configs['model']['fusion_model']['decoder_num_layers']
-config_decoder.num_attention_heads = configs['model']['fusion_model']['decoder_num_heads']
-config_decoder.hidden_size = configs['model']['fusion_model']['decoder_hidden_size']
-config_decoder.intermediate_size = configs['model']['fusion_model']['decoder_intermediate_size']
+config_decoder.num_hidden_layers = configs['model']['decoder_num_layers']
+config_decoder.num_attention_heads = configs['model']['decoder_num_heads']
+config_decoder.hidden_size = configs['model']['decoder_hidden_size']
+config_decoder.intermediate_size = configs['model']['decoder_intermediate_size']
 
 # set decoder config to causal lm
 config_decoder.is_decoder = True
@@ -91,17 +93,19 @@ config_decoder.add_cross_attention = True
 config_decoder.tie_encoder_decoder = False
 config_decoder.tie_word_embeddings = False
 
-# # Use pretrained model if it exists in the artifact folder to continue training
-# model_path = os.path.join(artifact_folder, "fusion", "model")
-# if os.path.exists(model_path):
-#     model = EncoderDecoderModel.from_pretrained(model_path)    
-#     print("Loaded model from pre-trained model")
-# else:
-config = EncoderDecoderConfig.from_encoder_decoder_configs(config_encoder, config_decoder)
-model = EncoderDecoderModel(config=config)
-config.decoder_start_token_id = tokenizer["<S>"]
-config.pad_token_id = 0
-print("Created new model")
+# Use pretrained model if it exists in the artifact folder to continue training
+if not run_pretraining:
+    model_path = os.path.join(artifact_folder, "style_transfer", "pre_trained_model")
+    model = EncoderDecoderModel.from_pretrained(model_path)    
+    print("Loaded model from pre-trained model")
+else:
+    config = EncoderDecoderConfig.from_encoder_decoder_configs(config_encoder, config_decoder)
+    model = EncoderDecoderModel(config=config)
+    config.decoder_start_token_id = tokenizer["<S>"]
+    config.pad_token_id = 0
+    print("Created new model")
+
+# model.gradient_checkpointing_enable()
 
 # Print the number of parameters in the model
 num_params = sum(p.numel() for p in model.parameters())
@@ -145,8 +149,24 @@ def preprocess_logits(logits: Tensor, _: Tensor) -> Tensor:
     pred_ids = argmax(logits[0], dim=-1)  # long dtype
     return pred_ids
 
-run_name = configs['training']['fusion']['run_name']
-model_dir = os.path.join(artifact_folder, "fusion", run_name)
+if run_pretraining:
+    run_name = configs['training']['pretraining']['run_name']
+    weight_decay = configs['training']['pretraining']['weight_decay']
+    gradient_accumulation_steps = configs['training']['pretraining']['gradient_accumulation_steps']
+    batch_size = configs['training']['pretraining']['batch_size']
+    learning_rate = configs['training']['pretraining']['learning_rate']
+    epochs = configs['training']['pretraining']['epochs']
+    warmup_ratio = configs['training']['pretraining']['warmup_ratio']
+else:
+    run_name = configs['training']['fine_tuning']['run_name']
+    weight_decay = configs['training']['fine_tuning']['weight_decay']
+    gradient_accumulation_steps = configs['training']['fine_tuning']['gradient_accumulation_steps']
+    batch_size = configs['training']['fine_tuning']['batch_size']
+    learning_rate = configs['training']['fine_tuning']['learning_rate']
+    epochs = configs['training']['fine_tuning']['epochs']
+    warmup_ratio = configs['training']['fine_tuning']['warmup_ratio']
+
+model_dir = os.path.join(artifact_folder, "style_transfer", run_name)
 log_dir = os.path.join(model_dir, "logs")
 # Clear the logs directory before training
 os.system(f"rm -rf {log_dir}")
@@ -157,16 +177,16 @@ training_args = TrainingArguments(
     per_device_train_batch_size=batch_size,
     per_device_eval_batch_size=batch_size,
     save_strategy="epoch",  # "steps" or "epoch"
-    save_total_limit=1,
+    save_total_limit=2,
     learning_rate=learning_rate,
     lr_scheduler_type="cosine_with_restarts",
-    warmup_ratio=0.3,
+    warmup_ratio=warmup_ratio,
     max_grad_norm=3.0,
-    weight_decay= configs['training']['fusion']['weight_decay'],
+    weight_decay= weight_decay,
     num_train_epochs=epochs,
-    evaluation_strategy="epoch",
-    gradient_accumulation_steps=configs['training']['fusion']['gradient_accumulation_steps'],
-    gradient_checkpointing=True,
+    eval_strategy="epoch",
+    gradient_accumulation_steps=gradient_accumulation_steps,
+    # gradient_checkpointing=True,
     optim="adafactor",
     seed=444,
     logging_strategy="steps",
@@ -183,7 +203,8 @@ training_args = TrainingArguments(
     report_to="tensorboard",
     run_name=run_name,
     push_to_hub=False,
-    dataloader_num_workers=5
+    dataloader_num_workers=5,
+    ddp_find_unused_parameters=True
 )
 
 # Define the Trainer
@@ -194,11 +215,13 @@ trainer = Trainer(
     eval_dataset=valid_dataset,
     compute_metrics=compute_metrics,
     preprocess_logits_for_metrics=preprocess_logits,
+    # data_collator=collate_fn,
     # callbacks=[EarlyStoppingCallback(early_stopping_patience=30)]
 )
 
 # Train and save the model
-train_result = trainer.train()
+print("Training the model")
+train_result = trainer.train(resume_from_checkpoint=False)
 trainer.save_model()
 trainer.log_metrics("train", train_result.metrics)
 trainer.save_metrics("train", train_result.metrics)

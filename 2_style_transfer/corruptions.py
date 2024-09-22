@@ -6,7 +6,18 @@ from typing import List, Tuple, Union, Dict
 
 class DataCorruption:
     def __init__(self):
-        pass
+
+        self.corruption_functions = {
+            'pitch_velocity_mask': self.pitch_velocity_mask,
+            'onset_duration_mask': self.onset_duration_mask,
+            'whole_mask': self.whole_mask,
+            'permute_pitches': self.permute_pitches,
+            'permute_pitch_velocity': self.permute_pitch_velocity,
+            'fragmentation': self.fragmentation,
+            'incorrect_transposition': self.incorrect_transposition,
+            'skyline': self.skyline,
+            'note_modification': self.note_modification
+        }
 
     @staticmethod
     def read_data_from_file(file_path: str) -> List[Union[str, List[Union[str, int]]]]:
@@ -149,6 +160,158 @@ class DataCorruption:
 
         return ['incorrect_transposition'] + meta_data + data, 'incorrect_transposition'
 
+    # Define a function to round a value to the nearest 10
+    @staticmethod
+    def round_to_nearest_n(input_value, round_to=10):
+        rounded_value = round(input_value / round_to) * round_to
+        return rounded_value
+
+    def note_modification(self, data: List, meta_data: List, **kwargs) -> Tuple[List[Union[str, List[Union[str, int]]]], str]:
+        """
+        Modify the notes in the data segment by either omitting them or adding in new notes.
+        """
+        data_copy = copy.deepcopy(data)
+        omitted_data = [i for i in data_copy if type(i) == str]
+        data_copy = [i for i in data_copy if type(i) == list]
+        skip_idx = []
+        for n, note in enumerate(data_copy):
+            if type(data_copy[n]) == list and n < (len(data_copy)-1) and n not in skip_idx:
+                # Note omission with dynamic probability
+                prob = random.uniform(0.1, 0.4)
+                if random.uniform(0, 1) < prob:
+                    skip_idx.append(n+1)
+                    next_note_onset = data_copy[n+1][2]
+                    curr_next_note_onset_diff = abs(data_copy[n][2] - next_note_onset)
+                    if curr_next_note_onset_diff <= 50:
+                        # Keep same onset and duration
+                        omitted_data.append(data_copy[n])
+                    else:
+                        # Increase the duration of the current note by the next note's duration
+                        new_duration = min(data_copy[n][3] + data_copy[n+1][3], 5000)
+                        data_copy[n][3] = new_duration
+                        # Add the current note to the omitted data
+                        omitted_data.append(data_copy[n])
+                else:
+                    omitted_data.append(data_copy[n])
+
+        added_data = []
+        for n, note in enumerate(omitted_data):
+            if type(omitted_data[n]) == list:
+                # Note addition with dynamic probability
+                prob = random.uniform(0.1, 0.4)
+                if random.uniform(0, 1) < prob and omitted_data[n][3] > 500 and n < (len(omitted_data)-1):
+                    # Add current note
+                    tmp = copy.deepcopy(omitted_data[n])
+                    # Modify the duration of the current note
+                    tmp[3] = int(tmp[3] / 2)
+                    tmp[3] = self.round_to_nearest_n(tmp[3], 10)
+                    added_data.append(tmp)
+                    # Add the new note
+                    # New pitch between -5 and 5 semitones from the current pitch
+                    new_pitch = tmp[0] + random.randint(-5, 5)
+                    # New velocity between 45 and 105
+                    new_velocity = random.choice([45, 60, 75, 90, 105])
+                    diff_curr_next_onset = abs(omitted_data[n+1][2] - tmp[2])
+                    # New onset should be between the current onset and the next onset
+                    new_onset = tmp[2] + random.randint(0, diff_curr_next_onset)
+                    # Round the new onset to the nearest 10
+                    new_onset = self.round_to_nearest_n(new_onset)
+                    # New duration should be the tmp[3] + or - 10% of the tmp[3]
+                    new_duration = min((tmp[3] + random.randint(-int(tmp[3] * 0.1), int(tmp[3] * 0.1))), 5000)
+                    # Round the new duration to the nearest 10
+                    new_duration = self.round_to_nearest_n(new_duration, 10)
+                    added_data.append([new_pitch, new_velocity, new_onset, new_duration])
+                else:
+                    added_data.append(omitted_data[n])
+            else:
+                added_data.append(omitted_data[n])
+                
+
+        return ['note_modification'] + meta_data + added_data, 'note_modification'
+
+    # Skyline function for separating melody and harmony from the tokenized sequence
+    def skyline(self, sequence: list, meta_data=[], diff_threshold=50, static_velocity=True, pitch_threshold=None, **kwargs):
+        
+        if pitch_threshold is None:
+            pitch_threshold = 0
+        
+        melody = []
+
+        if len(sequence) < 2:
+            return ['skyline'] + meta_data + melody, 'skyline'
+        
+        if type(sequence[0]) == str:
+            melody.append(sequence[0])
+            sequence = sequence[1:]
+
+        pointer_pitch = sequence[0][0]
+        pointer_velocity = sequence[0][1]
+        pointer_onset = sequence[0][2]
+        pointer_duration = sequence[0][3]
+
+        for i in range(1, len(sequence)):
+            if type(sequence[i]) != str:
+                current_pitch = sequence[i][0]
+                current_velocity = sequence[i][1]
+                current_onset = sequence[i][2]
+                current_duration = sequence[i][3]
+
+                if type(sequence[i-1]) == str and type(sequence[i-2]) == str:
+                    diff_curr_prev_onset = 5000
+                elif type(sequence[i-1]) == str and type(sequence[i-2]) != str:
+                    diff_curr_prev_onset = abs(current_onset - sequence[i-2][2])
+                else:
+                    diff_curr_prev_onset = abs(current_onset - sequence[i-1][2])
+                
+                # Check if the difference between the current onset and the previous onset is greater than the threshold and the pitch is greater than the threshold
+                if diff_curr_prev_onset > diff_threshold:
+
+                    if pointer_pitch > pitch_threshold:
+                        # Append the previous note
+                        if static_velocity:
+                            melody.append([pointer_pitch, 90, pointer_onset, pointer_duration])                        
+                        else:
+                            melody.append([pointer_pitch, pointer_velocity, pointer_onset, pointer_duration])
+                    
+                    # Update the pointer
+                    pointer_pitch = current_pitch
+                    pointer_velocity = current_velocity
+                    pointer_onset = current_onset
+                    pointer_duration = current_duration            
+                else:
+                    if current_pitch > pointer_pitch:
+                        # Update the pointer
+                        pointer_pitch = current_pitch
+                        pointer_velocity = current_velocity
+                        pointer_onset = current_onset
+                        pointer_duration = current_duration
+                    else:
+                        continue
+
+                # Append the last note
+                if i == len(sequence) - 1: 
+                    if diff_curr_prev_onset > diff_threshold:
+                        if pointer_pitch > pitch_threshold:
+                            if static_velocity:
+                                melody.append([pointer_pitch, 90, pointer_onset, pointer_duration])
+                            else:
+                                melody.append([pointer_pitch, pointer_velocity, pointer_onset, pointer_duration])
+                    else:
+                        if current_pitch > pointer_pitch:
+                            if current_pitch > pitch_threshold:
+                                if static_velocity:
+                                    melody.append([current_pitch, 90, current_onset, current_duration])
+                                else:
+                                    melody.append([current_pitch, current_velocity, current_onset, current_duration])
+
+            if sequence[i-1] == "<T>":
+                melody.append("<T>")
+            
+            if sequence[i] == "<D>":
+                melody.append("<D>")
+
+        return ['skyline'] + meta_data + melody, 'skyline'
+
     def shorten_list(self, lst, index, segment_indices, context_before, context_after, inference=False):
         # Ensure the list is not empty and the index is within bounds
         if not lst or index < 0 or index >= len(lst):
@@ -161,7 +324,7 @@ class DataCorruption:
         start_index = max(segment_index - context_before, 0)
         end_index = min(segment_index + context_after, len(segment_indices)-1)
         actual_start_index = segment_indices[start_index]
-        if random.uniform(0, 1) < 0.5 and index != 0 and not inference:
+        if random.uniform(0, 1) < 0.1 and index != 0 and not inference:
             actual_end_index = segment_indices[end_index] # no context after the corrupted segment
         else:
             actual_end_index = segment_indices[end_index] + 1 # context_after + 1 to include the next single item
@@ -187,34 +350,31 @@ class DataCorruption:
     def apply_random_corruption(self, data: List, 
                                 context_before: int = 5, context_after: int = 1, 
                                 meta_data: List = [], t_segment_ind: int = None,
-                                inference: bool = False, corruption_type: str = None) -> Dict:
+                                inference: bool = False, corruption_type: str = None,
+                                run_corruption: bool = True, exclude_idx=[]) -> Dict:
         """
         Apply a random corruption function to a segment of the data.
         """
 
-        corruption_functions = {
-            'pitch_velocity_mask': self.pitch_velocity_mask,
-            'onset_duration_mask': self.onset_duration_mask,
-            'whole_mask': self.whole_mask,
-            'permute_pitches': self.permute_pitches,
-            'permute_pitch_velocity': self.permute_pitch_velocity,
-            'fragmentation': self.fragmentation,
-            'incorrect_transposition': self.incorrect_transposition
-        }
         if corruption_type is not None and corruption_type != 'random':
-            corruption_function = corruption_functions[corruption_type]
+            corruption_function = self.corruption_functions[corruption_type]
         else:
-            corruption_function = random.choice(list(corruption_functions.values()))
+            corruption_function = random.choice(list(self.corruption_functions.values()))
 
         data_copy = copy.deepcopy(data)
         separated_sequence = self.seperateitems(data_copy)
         corruption_data = copy.deepcopy(separated_sequence)
-        all_segment_indices, index, segment, last_idx_flag = self.get_segment_to_corrupt(corruption_data, t_segment_ind=t_segment_ind, exclude_idx=[])
+        all_segment_indices, index, segment, last_idx_flag = self.get_segment_to_corrupt(corruption_data, t_segment_ind=t_segment_ind, exclude_idx=exclude_idx)
         segment_copy = copy.deepcopy(segment)
 
-        corrupted_segment, corruption_type = corruption_function(segment_copy, meta_data, inference=inference)
-        corrupted_segment = ['SEP'] + corrupted_segment + ['SEP']
-        corruption_data[index] = corrupted_segment
+        if run_corruption:
+            corrupted_segment, corruption_type = corruption_function(segment_copy, meta_data=meta_data, inference=inference)
+            corrupted_segment = ['SEP'] + corrupted_segment + ['SEP']
+            corruption_data[index] = corrupted_segment
+        else:
+            corrupted_segment = segment_copy
+            corruption_data[index] = corrupted_segment
+            corruption_type = None
 
         # Modify corrupted_data to shorten context before and after the corrupted segment
         shortened_corrupted_data = self.shorten_list(corruption_data, index, all_segment_indices, context_before=context_before, context_after=context_after, inference=inference)
@@ -245,5 +405,6 @@ if __name__ == '__main__':
     data_corruption = DataCorruption()
 
     # Apply a random corruption
-    output = data_corruption.apply_random_corruption(data, context_before=5, context_after=1, meta_data=["jazz"], t_segment_ind=2, inference=False)
-    print(output)
+    output = data_corruption.apply_random_corruption(data, context_before=5, context_after=1, meta_data=["jazz"], t_segment_ind=None, inference=False, corruption_type=None, run_corruption=True)
+    print(output['original_segment'])
+    print(output['corrupted_segment'])
