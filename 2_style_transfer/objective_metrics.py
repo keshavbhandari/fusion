@@ -2,7 +2,6 @@ from aria.data.midi import MidiDict
 from aria.tokenizer import AbsTokenizer
 import pickle
 import argparse
-import os
 import yaml
 from tqdm import tqdm
 import torch
@@ -19,10 +18,19 @@ from transformers import AutoProcessor, ClapModel
 from transformers import AutoModelForSequenceClassification
 from data_loader import Genre_Classifier_Dataset
 from corruptions import DataCorruption
+import os
+os.environ["OMP_NUM_THREADS"] = "6"
+os.environ["OPENBLAS_NUM_THREADS"] = "6"
+os.environ["MKL_NUM_THREADS"] = "6"
+os.environ["VECLIB_MAXIMUM_THREADS"] = "6"
+os.environ["NUMEXPR_NUM_THREADS"] = "6"
+# os.sched_setaffinity(0, {0, 1, 2, 3, 4, 5})
 import sys
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(os.path.dirname(SCRIPT_DIR))
 from utils.utils import convert_midi_to_wav
+torch.set_num_threads(6)
+torch.set_num_interop_threads(6)
 
 def get_genre_probabilities(midi_file_path, tokenizer, model, dataset_obj, encoder_max_sequence_length, aria_tokenizer, verbose=True):
     
@@ -195,9 +203,12 @@ def compare_similarity_matrices(original_wav_file, generated_wav_file, verbose=T
 
 
 def clap_similarity_score(audio_sample, text, model, processor):
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    model = model.to(device)
+
     # Preprocess inputs
-    text_input = processor(text=[text], return_tensors="pt")
-    audio_input = processor(audios=audio_sample, return_tensors="pt", sampling_rate=48000)
+    text_input = processor(text=[text], return_tensors="pt").to(device)
+    audio_input = processor(audios=audio_sample, return_tensors="pt", sampling_rate=48000).to(device)
 
     # Generate embeddings
     text_embeddings = model.get_text_features(**text_input)
@@ -210,14 +221,17 @@ def clap_similarity_score(audio_sample, text, model, processor):
     # Compute similarity score
     similarity_score = torch.mm(text_embeddings, audio_embeddings.T)
 
+    # Clear GPU memory
+    torch.cuda.empty_cache()
+
     return similarity_score
 
 
 def compare_clap_similarity_score(wav_filepath, model, processor, verbose=True):
-    audio_sample, sr = librosa.load(wav_filepath, sr=48000, mono=True)
+    audio_sample, sr = librosa.load(wav_filepath, sr=None, mono=True, duration=60*3)
     total_duration = audio_sample.shape[0] / sr
 
-    segment_duration = 30  # Duration of each segment in seconds
+    segment_duration = 5  # Duration of each segment in seconds
     segment_samples = int(segment_duration * sr)  # Number of samples in each segment
 
     classical_similarity_scores = []
@@ -235,8 +249,8 @@ def compare_clap_similarity_score(wav_filepath, model, processor, verbose=True):
         jazz_similarity_scores.append(jazz_similarity_score)
     
     # Average the similarity score values with numpy
-    classical_similarity_scores = float(np.mean(torch.cat(classical_similarity_scores).detach().numpy()))
-    jazz_similarity_scores = float(np.mean(torch.cat(jazz_similarity_scores).detach().numpy()))
+    classical_similarity_scores = float(np.mean(torch.cat(classical_similarity_scores).detach().cpu().numpy()))
+    jazz_similarity_scores = float(np.mean(torch.cat(jazz_similarity_scores).detach().cpu().numpy()))
     if verbose:
         print(f"Average similarity score for classical music: {classical_similarity_scores}")
         print(f"Average similarity score for jazz music: {jazz_similarity_scores}")
@@ -301,16 +315,16 @@ if __name__ == "__main__":
     all_midi_files = glob.glob(os.path.join(eval_folder, "**/*.mid"), recursive=True)
     original_midi_file_paths = [f for f in all_midi_files if "generated" not in f and "pop" not in f]
     # Filter out all files from 0 until the specified file
-    # filter_until = "evaluations/jazz/32/original_32.mid"
-    # original_midi_file_paths = original_midi_file_paths[original_midi_file_paths.index(filter_until):]
+    filter_until = "evaluations/jazz/89/original_89.mid"
+    original_midi_file_paths = original_midi_file_paths[original_midi_file_paths.index(filter_until):]
     generated_midi_file_paths = [f for f in all_midi_files if "generated" in f and "pop" not in f]
+    generated_midi_file_paths = [f for f in generated_midi_file_paths if "experiment_3" not in f and "experiment_4" not in f]
+    print("Number of original midi files: ", len(original_midi_file_paths))
+    print("Number of generated midi files: ", len(generated_midi_file_paths))
 
     for original_midi_file_path in original_midi_file_paths:
         matching_generation_file_paths = [f for f in generated_midi_file_paths if os.path.join(os.path.dirname(original_midi_file_path), "experiment_") in f]
         for generated_midi_file_path in tqdm(matching_generation_file_paths):
-
-            # generated_midi_file_path = "/homes/kb658/fusion/evaluations/jazz/32/experiment_1/target_style_classical/corruption_name_whole_mask/corruption_rate_1.0/pass_7/generated_original_32.mid"
-            # original_midi_file_path = "/homes/kb658/fusion/evaluations/jazz/32/original_32.mid"
 
             generated_midi_folder = os.path.dirname(generated_midi_file_path)
             print("Processing: ", generated_midi_file_path)
@@ -322,16 +336,19 @@ if __name__ == "__main__":
             original_wav_file = original_midi_file_path.replace(".mid", ".wav")
             generated_wav_file = convert_midi_to_wav([generated_midi_file_path], "/homes/kb658/fusion/artifacts/soundfont.sf", max_workers=1, verbose=False)
             generated_wav_file = generated_wav_file[0]
+            print("Wav file created")
 
             # Get the similarity matrices
             try:
                 ssm_score, chroma_score = compare_similarity_matrices(original_wav_file, generated_wav_file, verbose=False)
             except Exception as e:
                 ssm_score, chroma_score = None, None
+            print("Similarity matrices calculated")
 
             # Get the CLAP similarity scores
             original_clap_score = compare_clap_similarity_score(original_wav_file, clap_model, processor, verbose=False)
             generated_clap_score = compare_clap_similarity_score(generated_wav_file, clap_model, processor, verbose=False)
+            print("CLAP similarity scores calculated")
 
             metrics = {
                 "Original Genre Probabilities": original_genre_probs,

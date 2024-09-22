@@ -402,6 +402,7 @@ def save_wav(filepath, soundfont_path="soundfont.sf"):
         f"fluidsynth -r 48000 {soundfont_path} -g 1.0 --quiet --no-shell {midi_filepath} -T wav -F {wav_filepath} > /dev/null",
         shell=True
     )
+    # -o synth.cpu-cores=6
     process.wait()
 
     return wav_filepath
@@ -409,12 +410,22 @@ def save_wav(filepath, soundfont_path="soundfont.sf"):
 
 def convert_midi_to_wav(filepaths, soundfont_path="../artifacts/soundfont.sf", max_workers=32, verbose=True):
     if verbose:
-        with ProcessPoolExecutor(max_workers=max_workers) as executor:
-            # Use tqdm to track progress
-            results = list(tqdm(executor.map(save_wav, filepaths, [soundfont_path]*len(filepaths)), total=len(filepaths), desc="Converting MIDI to WAV"))
+        if max_workers == 1:
+            results = []
+            for filepath in tqdm(filepaths, desc="Converting MIDI to WAV"):
+                results.append(save_wav(filepath, soundfont_path))
+        else:
+            with ProcessPoolExecutor(max_workers=max_workers) as executor:
+                # Use tqdm to track progress
+                results = list(tqdm(executor.map(save_wav, filepaths, [soundfont_path]*len(filepaths)), total=len(filepaths), desc="Converting MIDI to WAV"))
     else:
-        with ProcessPoolExecutor(max_workers=max_workers) as executor:
-            results = list(executor.map(save_wav, filepaths, [soundfont_path]*len(filepaths)))
+        if max_workers == 1:
+            results = []
+            for filepath in filepaths:
+                results.append(save_wav(filepath, soundfont_path))
+        else:
+            with ProcessPoolExecutor(max_workers=max_workers) as executor:
+                results = list(executor.map(save_wav, filepaths, [soundfont_path]*len(filepaths)))
     return results
 
 # # Find all notes which have the same onset time before n notes and print the average ratio of same note onsets
