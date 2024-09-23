@@ -315,7 +315,7 @@ if __name__ == "__main__":
     all_midi_files = glob.glob(os.path.join(eval_folder, "**/*.mid"), recursive=True)
     original_midi_file_paths = [f for f in all_midi_files if "generated" not in f and "pop" not in f]
     # Filter out all files from 0 until the specified file
-    filter_until = "evaluations/jazz/89/original_89.mid"
+    filter_until = "evaluations/classical/34/original_34.mid"
     original_midi_file_paths = original_midi_file_paths[original_midi_file_paths.index(filter_until):]
     generated_midi_file_paths = [f for f in all_midi_files if "generated" in f and "pop" not in f]
     generated_midi_file_paths = [f for f in generated_midi_file_paths if "experiment_3" not in f and "experiment_4" not in f]
@@ -324,12 +324,17 @@ if __name__ == "__main__":
 
     for original_midi_file_path in original_midi_file_paths:
         matching_generation_file_paths = [f for f in generated_midi_file_paths if os.path.join(os.path.dirname(original_midi_file_path), "experiment_") in f]
+        original_genre_probs = get_genre_probabilities(original_midi_file_path, tokenizer, model, dataset_obj, encoder_max_sequence_length, aria_tokenizer, verbose=False)
         for generated_midi_file_path in tqdm(matching_generation_file_paths):
 
             generated_midi_folder = os.path.dirname(generated_midi_file_path)
             print("Processing: ", generated_midi_file_path)
 
-            original_genre_probs = get_genre_probabilities(original_midi_file_path, tokenizer, model, dataset_obj, encoder_max_sequence_length, aria_tokenizer, verbose=False)
+            # Check if the metrics file already exists
+            if os.path.exists(os.path.join(generated_midi_folder, "metrics.json")):
+                print("Metrics file already exists")
+                continue
+
             generated_genre_probs = get_genre_probabilities(generated_midi_file_path, tokenizer, model, dataset_obj, encoder_max_sequence_length, aria_tokenizer, verbose=False)
 
             # Convert the midi files to wav

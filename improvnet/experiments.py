@@ -322,18 +322,18 @@ if __name__ == '__main__':
         max_processes_per_gpu = 4
 
         # Example usage:
-        # filtered_midi_file_paths = [file for file in original_midi_file_paths if convert_to in file and "generated" not in file and "pop" not in file]
-        # print(f"Number of files to process: {len(filtered_midi_file_paths)}")
-        # run_evaluation(filtered_midi_file_paths, convert_to, context, t_segment_start, 
-        #             corruptions, corruption_rates, n_passes, fusion_model, configs, novel_peaks_pct, tokenizer, decode_tokenizer, 
-        #             experiment_name, max_processes_per_gpu, write_intermediate_passes=write_intermediate_passes)
+        filtered_midi_file_paths = [file for file in original_midi_file_paths if convert_to in file and "generated" not in file and "pop" not in file]
+        print(f"Number of files to process: {len(filtered_midi_file_paths)}")
+        run_evaluation(filtered_midi_file_paths, convert_to, context, t_segment_start, 
+                    corruptions, corruption_rates, n_passes, fusion_model, configs, novel_peaks_pct, tokenizer, decode_tokenizer, 
+                    experiment_name, max_processes_per_gpu, write_intermediate_passes=write_intermediate_passes)
 
         data_corruption_obj = DataCorruption()
         corruptions = dict()
         corruptions["random"] = None
         corruption_rates = [1.0]
         n_passes = [10]
-        context = [2,1]
+        context = [5,4,3,2,1]
         t_segment_start = 2
         novel_peaks_pct = 0.05
         convert_to = "classical"
