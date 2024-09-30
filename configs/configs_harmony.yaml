@@ -48,15 +48,15 @@ training:
 
 generation:
   convert_from: classical
-  convert_to: jazz # Choose from ['jazz', 'classical'].
-  midi_file_path: "/homes/kb658/fusion/input/debussy-clair-de-lune.mid"
-  wav_file_path: "/homes/kb658/fusion/input/debussy-clair-de-lune_original.wav"
-  novel_peaks_pct: 0.05 # Percentage of novel peaks to be preserved.
-  context_before: 5 # Number of context frames before the corruption segment.
-  context_after: 5 # Number of context frames after the corruption segment.
-  t_segment_start: 2 # Start frame of the corruption segment. Each frame is 5 seconds long. For example, 2 corresponds to 0-10 seconds which would be preserved. The model will corrupt the next segment onwards.
+  convert_to: classical # Choose from ['jazz', 'classical'].
+  midi_file_path: "/homes/kb658/fusion/input/NLB135758_01_YY.mid" #"/homes/kb658/fusion/input/Oh_Johnny,_oh_Johnny,_Oh!.mid"
+  wav_file_path: "" # No wav file path indicates that novel peaks will not be preserved for the harmony generation task.
+  novel_peaks_pct: 0.0 # Percentage of novel peaks to be preserved.
+  context_before: 2 # Number of context frames before the corruption segment.
+  context_after: 2 # Number of context frames after the corruption segment.
+  t_segment_start: 0 # Start frame of the corruption segment. Each frame is 5 seconds long. For example, 2 corresponds to 0-10 seconds which would be preserved. The model will corrupt the next segment onwards.
   write_intermediate_passes: True # If True, the model will write the intermediate passes to the output folder.
-  passes:
+  passes: # We use only skyline corruption for harmony generation.
     pass_1:
       corruption_rate: 1.0
       corruption_type: skyline
@@ -64,29 +64,14 @@ generation:
       corruption_rate: 1.0
       corruption_type: skyline
     pass_3:
-      corruption_rate: 0.5
-      corruption_type: pitch_velocity_mask
-    pass_4:
-      corruption_rate: 0.5
-      corruption_type: incorrect_transposition
-    pass_5:
-      corruption_rate: 0.5
-      corruption_type: permute_pitches
-    pass_6:
-      corruption_rate: 0.5
-      corruption_type: note_modification
-    pass_7:
       corruption_rate: 1.0
-      corruption_type: onset_duration_mask
-    pass_8:
-      corruption_rate: 0.5
-      corruption_type: fragmentation
-    pass_9:
-      corruption_rate: 0.25
-      corruption_type: whole_mask
-    pass_10:
-      corruption_rate: 0.25
-      corruption_type: random
+      corruption_type: skyline
+    pass_4:
+      corruption_rate: 1.0
+      corruption_type: skyline
+    pass_5:
+      corruption_rate: 1.0
+      corruption_type: skyline
 
 raw_data:
   raw_data_folders: 

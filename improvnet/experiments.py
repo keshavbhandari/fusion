@@ -282,9 +282,9 @@ if __name__ == '__main__':
         # Example usage:
         filtered_midi_file_paths = [file for file in original_midi_file_paths if convert_to in file and "generated" not in file and "pop" not in file]
         print(f"Number of files to process: {len(filtered_midi_file_paths)}")
-        run_evaluation(filtered_midi_file_paths, convert_to, context, t_segment_start, 
-                    corruptions, corruption_rates, n_passes, fusion_model, configs, novel_peaks_pct, tokenizer, decode_tokenizer, 
-                    experiment_name, max_processes_per_gpu, write_intermediate_passes=write_intermediate_passes)
+        # run_evaluation(filtered_midi_file_paths, convert_to, context, t_segment_start, 
+        #             corruptions, corruption_rates, n_passes, fusion_model, configs, novel_peaks_pct, tokenizer, decode_tokenizer, 
+        #             experiment_name, max_processes_per_gpu, write_intermediate_passes=write_intermediate_passes)
 
         data_corruption_obj = DataCorruption()
         corruptions = data_corruption_obj.corruption_functions

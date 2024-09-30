@@ -314,11 +314,14 @@ if __name__ == "__main__":
     # Get file paths of the original and generated midi files from eval_folder
     all_midi_files = glob.glob(os.path.join(eval_folder, "**/*.mid"), recursive=True)
     original_midi_file_paths = [f for f in all_midi_files if "generated" not in f and "pop" not in f]
+    # Split original_midi_file_paths into 5 parts
+    original_midi_file_paths_splits = [original_midi_file_paths[i:i + len(original_midi_file_paths)//4] for i in range(0, len(original_midi_file_paths), len(original_midi_file_paths)//4)]
+    original_midi_file_paths = original_midi_file_paths_splits[3]
     # Filter out all files from 0 until the specified file
-    filter_until = "evaluations/classical/34/original_34.mid"
-    original_midi_file_paths = original_midi_file_paths[original_midi_file_paths.index(filter_until):]
+    # filter_until = "evaluations/classical/34/original_34.mid"
+    # original_midi_file_paths = original_midi_file_paths[original_midi_file_paths.index(filter_until):]
     generated_midi_file_paths = [f for f in all_midi_files if "generated" in f and "pop" not in f]
-    generated_midi_file_paths = [f for f in generated_midi_file_paths if "experiment_3" not in f and "experiment_4" not in f]
+    generated_midi_file_paths = [f for f in generated_midi_file_paths if "experiment_3" in f or "experiment_4" in f]
     print("Number of original midi files: ", len(original_midi_file_paths))
     print("Number of generated midi files: ", len(generated_midi_file_paths))
 
@@ -350,18 +353,18 @@ if __name__ == "__main__":
                 ssm_score, chroma_score = None, None
             print("Similarity matrices calculated")
 
-            # Get the CLAP similarity scores
-            original_clap_score = compare_clap_similarity_score(original_wav_file, clap_model, processor, verbose=False)
-            generated_clap_score = compare_clap_similarity_score(generated_wav_file, clap_model, processor, verbose=False)
-            print("CLAP similarity scores calculated")
+            # # Get the CLAP similarity scores
+            # original_clap_score = compare_clap_similarity_score(original_wav_file, clap_model, processor, verbose=False)
+            # generated_clap_score = compare_clap_similarity_score(generated_wav_file, clap_model, processor, verbose=False)
+            # print("CLAP similarity scores calculated")
 
             metrics = {
                 "Original Genre Probabilities": original_genre_probs,
                 "Generated Genre Probabilities": generated_genre_probs,
                 "SSM Similarity Score": ssm_score,
                 "Chroma Frame Similarity Score": chroma_score,
-                "Original CLAP Score": original_clap_score,
-                "Generated CLAP Score": generated_clap_score
+                # "Original CLAP Score": original_clap_score,
+                # "Generated CLAP Score": generated_clap_score
             }
 
             # Save the metrics as a JSON file

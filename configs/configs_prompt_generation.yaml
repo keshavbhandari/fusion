@@ -48,45 +48,18 @@ training:
 
 generation:
   convert_from: classical
-  convert_to: jazz # Choose from ['jazz', 'classical'].
-  midi_file_path: "/homes/kb658/fusion/input/debussy-clair-de-lune.mid"
-  wav_file_path: "/homes/kb658/fusion/input/debussy-clair-de-lune_original.wav"
-  novel_peaks_pct: 0.05 # Percentage of novel peaks to be preserved.
+  convert_to: classical # Choose from ['jazz', 'classical'].
+  midi_file_path: "/homes/kb658/fusion/input/schumann_kinderszenen_15_7_(c)harfesoft.mid"
+  wav_file_path: "/homes/kb658/fusion/input/schumann_kinderszenen_15_7_(c)harfesoft.wav"
+  novel_peaks_pct: 0.0 # Percentage of novel peaks to be preserved.
   context_before: 5 # Number of context frames before the corruption segment.
-  context_after: 5 # Number of context frames after the corruption segment.
-  t_segment_start: 2 # Start frame of the corruption segment. Each frame is 5 seconds long. For example, 2 corresponds to 0-10 seconds which would be preserved. The model will corrupt the next segment onwards.
+  context_after: 0 # Number of context frames after the corruption segment. In case of prompt generation, we do not need any context after the corruption segment.
+  t_segment_start: 5 # Start frame of the corruption segment. Each frame is 5 seconds long. For example, 2 corresponds to 0-10 seconds which would be preserved. The model will corrupt the next segment onwards.
   write_intermediate_passes: True # If True, the model will write the intermediate passes to the output folder.
   passes:
     pass_1:
       corruption_rate: 1.0
-      corruption_type: skyline
-    pass_2:
-      corruption_rate: 1.0
-      corruption_type: skyline
-    pass_3:
-      corruption_rate: 0.5
-      corruption_type: pitch_velocity_mask
-    pass_4:
-      corruption_rate: 0.5
-      corruption_type: incorrect_transposition
-    pass_5:
-      corruption_rate: 0.5
-      corruption_type: permute_pitches
-    pass_6:
-      corruption_rate: 0.5
-      corruption_type: note_modification
-    pass_7:
-      corruption_rate: 1.0
-      corruption_type: onset_duration_mask
-    pass_8:
-      corruption_rate: 0.5
-      corruption_type: fragmentation
-    pass_9:
-      corruption_rate: 0.25
       corruption_type: whole_mask
-    pass_10:
-      corruption_rate: 0.25
-      corruption_type: random
 
 raw_data:
   raw_data_folders: 
