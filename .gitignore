@@ -3,7 +3,6 @@
 __pycache__/
 *.pyc
 artifacts/*
-input/*
 output/*
 data/*
 evaluations/*
