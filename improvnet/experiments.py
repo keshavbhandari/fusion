@@ -454,7 +454,7 @@ if __name__ == '__main__':
                             experiment_name, max_processes_per_gpu, write_intermediate_passes, temperature, save_infilling_only)
         
     if args.experiment_name == "experiment_6" or args.experiment_name == "all":
-        ################# Experiment 5: Infilling ################
+        ################# Experiment 5: Prompt Continuation ################
         corruption_name = "whole_mask"
         corruption_rate = 1.0
         pass_number = 1
