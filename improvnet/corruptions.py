@@ -372,9 +372,14 @@ class DataCorruption:
             corrupted_segment = ['SEP'] + corrupted_segment + ['SEP']
             corruption_data[index] = corrupted_segment
         else:
-            corrupted_segment = segment_copy
-            corruption_data[index] = corrupted_segment
-            corruption_type = None
+            if corruption_type == 'skyline':
+                corrupted_segment = segment_copy
+                corrupted_segment = ['SEP'] + ['skyline'] + meta_data + corrupted_segment + ['SEP']
+                corruption_data[index] = corrupted_segment
+            else:
+                corrupted_segment = segment_copy
+                corruption_data[index] = corrupted_segment
+                corruption_type = None
 
         # Modify corrupted_data to shorten context before and after the corrupted segment
         shortened_corrupted_data = self.shorten_list(corruption_data, index, all_segment_indices, context_before=context_before, context_after=context_after, inference=inference)

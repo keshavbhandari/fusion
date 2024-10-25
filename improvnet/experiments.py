@@ -24,6 +24,7 @@ from aria.tokenizer import AbsTokenizer
 
 from corruptions import DataCorruption
 from generation import generate
+from infill import infill
 # from classify_genre import get_genre_probabilities
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -94,6 +95,33 @@ def generate_batch_on_gpu(gpu_id, midi_file_paths, convert_to, context_before, c
         tqdm.write(f"Progress: {counter.value}/{total_files} files processed.")
 
 
+def infill_batch_on_gpu(gpu_id, midi_file_paths, convert_to, context_before, context_after, context_infilling,
+                          t_segment_start, corruption_passes, corruption_name, corruption_rate, 
+                          pass_number, fusion_model, configs, novel_peaks_pct, tokenizer, decode_tokenizer, experiment_name, 
+                          counter, total_files, write_intermediate_passes, temperature, save_infilling_only):
+    torch.cuda.set_device(gpu_id)
+    for i, item in enumerate(midi_file_paths):
+        midi_file_path = item
+        audio_file_path = midi_file_path.replace(".mid", ".wav")
+        output_folder = os.path.join(*midi_file_path.split("/")[:-1], experiment_name, "target_style_"+convert_to, "pass_"+str(pass_number))
+        print(output_folder)
+        # time.sleep(30)
+        try:
+            infill(midi_file_path, audio_file_path, fusion_model, configs, novel_peaks_pct,
+             t_segment_start, convert_to, context_before, context_after, context_infilling,
+             corruption_passes, tokenizer, decode_tokenizer, output_folder, 
+             save_original=True, quiet=False, write_intermediate_passes=write_intermediate_passes, 
+             temperature=temperature, save_infilling_only=save_infilling_only)
+        except Exception as e:
+            print(f"Error: {e}")
+            print(f"Error in processing file: {midi_file_path}")
+        
+        # Safely increment the counter
+        with counter.get_lock():
+            counter.value += 1
+        tqdm.write(f"Progress: {counter.value}/{total_files} files processed.")
+
+
 def run_parallel_generation(midi_file_paths, convert_to, context_before, context_after,
                             t_segment_start, corruption_passes, corruption_name, corruption_rate, 
                             pass_number, fusion_model, configs, novel_peaks_pct, tokenizer, decode_tokenizer, 
@@ -122,8 +150,35 @@ def run_parallel_generation(midi_file_paths, convert_to, context_before, context
     for p in processes:
         p.join()
 
+def run_parallel_infill(midi_file_paths, convert_to, context_before, context_after, context_infilling,
+                            t_segment_start, corruption_passes, corruption_name, corruption_rate, 
+                            pass_number, fusion_model, configs, novel_peaks_pct, tokenizer, decode_tokenizer, 
+                            experiment_name, max_processes_per_gpu, write_intermediate_passes, temperature, save_infilling_only):
+    
+    available_gpus = list(range(torch.cuda.device_count()))
+    midi_files_split = np.array_split(midi_file_paths, len(available_gpus) * max_processes_per_gpu)
+    
+    # Shared counter
+    counter = multiprocessing.Value('i', 0)
+    processes = []
+    for gpu_id in available_gpus:
+        fusion_model.to(f"cuda:{gpu_id}")
+        # fusion_model.share_memory()
+        for i in range(max_processes_per_gpu):
+            p = multiprocessing.Process(target=infill_batch_on_gpu, 
+                                         args=(gpu_id, midi_files_split[gpu_id * max_processes_per_gpu + i], 
+                                               convert_to, context_before, context_after, context_infilling,
+                                               t_segment_start, corruption_passes, corruption_name, 
+                                               corruption_rate, pass_number, fusion_model, 
+                                               configs, novel_peaks_pct, tokenizer, decode_tokenizer, experiment_name, 
+                                               counter, len(midi_file_paths), write_intermediate_passes, temperature, save_infilling_only))
+            processes.append(p)
+            p.start()
 
-def run_evaluation(midi_file_paths, convert_to, context, t_segment_start, 
+    for p in processes:
+        p.join()
+
+def run_generation(midi_file_paths, convert_to, context, t_segment_start, 
                        corruptions, corruption_rates, n_passes, fusion_model, configs, novel_peaks_pct, 
                        tokenizer, decode_tokenizer, experiment_name, max_processes_per_gpu, write_intermediate_passes):
     print(f"Running experiment {experiment_name}")
@@ -197,7 +252,7 @@ if __name__ == '__main__':
         # Example usage:
         filtered_midi_file_paths = [file for file in original_midi_file_paths if convert_to not in file and "generated" not in file and "pop" not in file]
         print(f"Number of files to process: {len(filtered_midi_file_paths)}")
-        run_evaluation(filtered_midi_file_paths, convert_to, context, t_segment_start, 
+        run_generation(filtered_midi_file_paths, convert_to, context, t_segment_start, 
                     corruptions, corruption_rates, n_passes, fusion_model, configs, novel_peaks_pct, tokenizer, decode_tokenizer, 
                     experiment_name, max_processes_per_gpu, write_intermediate_passes=write_intermediate_passes)
 
@@ -217,7 +272,7 @@ if __name__ == '__main__':
         # Example usage:
         filtered_midi_file_paths = [file for file in original_midi_file_paths if convert_to not in file and "generated" not in file and "pop" not in file]
         print(f"Number of files to process: {len(filtered_midi_file_paths)}")
-        run_evaluation(filtered_midi_file_paths, convert_to, context, t_segment_start, 
+        run_generation(filtered_midi_file_paths, convert_to, context, t_segment_start, 
                     corruptions, corruption_rates, n_passes, fusion_model, configs, novel_peaks_pct, tokenizer, decode_tokenizer, 
                     experiment_name, max_processes_per_gpu, write_intermediate_passes=write_intermediate_passes)
         
@@ -240,7 +295,7 @@ if __name__ == '__main__':
         # Example usage:
         filtered_midi_file_paths = [file for file in original_midi_file_paths if convert_to not in file and "generated" not in file and "pop" not in file]
         print(f"Number of files to process: {len(filtered_midi_file_paths)}")
-        run_evaluation(filtered_midi_file_paths, convert_to, context, t_segment_start, 
+        run_generation(filtered_midi_file_paths, convert_to, context, t_segment_start, 
                     corruptions, corruption_rates, n_passes, fusion_model, configs, novel_peaks_pct, tokenizer, decode_tokenizer, 
                     experiment_name, max_processes_per_gpu, write_intermediate_passes=write_intermediate_passes)
 
@@ -260,7 +315,7 @@ if __name__ == '__main__':
         # Example usage:
         filtered_midi_file_paths = [file for file in original_midi_file_paths if convert_to not in file and "generated" not in file and "pop" not in file]
         print(f"Number of files to process: {len(filtered_midi_file_paths)}")
-        run_evaluation(filtered_midi_file_paths, convert_to, context, t_segment_start, 
+        run_generation(filtered_midi_file_paths, convert_to, context, t_segment_start, 
                     corruptions, corruption_rates, n_passes, fusion_model, configs, novel_peaks_pct, tokenizer, decode_tokenizer, 
                     experiment_name, max_processes_per_gpu, write_intermediate_passes=write_intermediate_passes)
         
@@ -282,9 +337,9 @@ if __name__ == '__main__':
         # Example usage:
         filtered_midi_file_paths = [file for file in original_midi_file_paths if convert_to in file and "generated" not in file and "pop" not in file]
         print(f"Number of files to process: {len(filtered_midi_file_paths)}")
-        # run_evaluation(filtered_midi_file_paths, convert_to, context, t_segment_start, 
-        #             corruptions, corruption_rates, n_passes, fusion_model, configs, novel_peaks_pct, tokenizer, decode_tokenizer, 
-        #             experiment_name, max_processes_per_gpu, write_intermediate_passes=write_intermediate_passes)
+        run_generation(filtered_midi_file_paths, convert_to, context, t_segment_start, 
+                    corruptions, corruption_rates, n_passes, fusion_model, configs, novel_peaks_pct, tokenizer, decode_tokenizer, 
+                    experiment_name, max_processes_per_gpu, write_intermediate_passes=write_intermediate_passes)
 
         data_corruption_obj = DataCorruption()
         corruptions = data_corruption_obj.corruption_functions
@@ -302,7 +357,7 @@ if __name__ == '__main__':
         # Example usage:
         filtered_midi_file_paths = [file for file in original_midi_file_paths if convert_to in file and "generated" not in file and "pop" not in file]
         print(f"Number of files to process: {len(filtered_midi_file_paths)}")
-        run_evaluation(filtered_midi_file_paths, convert_to, context, t_segment_start, 
+        run_generation(filtered_midi_file_paths, convert_to, context, t_segment_start, 
                     corruptions, corruption_rates, n_passes, fusion_model, configs, novel_peaks_pct, tokenizer, decode_tokenizer, 
                     experiment_name, max_processes_per_gpu, write_intermediate_passes=write_intermediate_passes)
     
@@ -324,7 +379,7 @@ if __name__ == '__main__':
         # Example usage:
         filtered_midi_file_paths = [file for file in original_midi_file_paths if convert_to in file and "generated" not in file and "pop" not in file]
         print(f"Number of files to process: {len(filtered_midi_file_paths)}")
-        run_evaluation(filtered_midi_file_paths, convert_to, context, t_segment_start, 
+        run_generation(filtered_midi_file_paths, convert_to, context, t_segment_start, 
                     corruptions, corruption_rates, n_passes, fusion_model, configs, novel_peaks_pct, tokenizer, decode_tokenizer, 
                     experiment_name, max_processes_per_gpu, write_intermediate_passes=write_intermediate_passes)
 
@@ -344,6 +399,106 @@ if __name__ == '__main__':
         # Example usage:
         filtered_midi_file_paths = [file for file in original_midi_file_paths if convert_to in file and "generated" not in file and "pop" not in file]
         print(f"Number of files to process: {len(filtered_midi_file_paths)}")
-        run_evaluation(filtered_midi_file_paths, convert_to, context, t_segment_start, 
+        run_generation(filtered_midi_file_paths, convert_to, context, t_segment_start, 
                     corruptions, corruption_rates, n_passes, fusion_model, configs, novel_peaks_pct, tokenizer, decode_tokenizer, 
                     experiment_name, max_processes_per_gpu, write_intermediate_passes=write_intermediate_passes)
+        
+    if args.experiment_name == "experiment_5" or args.experiment_name == "all":
+        ################# Experiment 5: Infilling ################
+        corruption_name = "whole_mask"
+        corruption_rate = 1.0
+        pass_number = 1
+        corruption_passes = {'pass_1': {'corruption_rate': 1.0, 'corruption_type': "whole_mask"}}
+        context_before = 4
+        context_after = 4
+        context_infilling = 2
+        t_segment_start = 5
+        novel_peaks_pct = 0
+        convert_to = "jazz"
+        experiment_name = "experiment_5"
+        write_intermediate_passes = True
+        max_processes_per_gpu = 1
+        temperature = 0.97
+        save_infilling_only = True
+
+        # Example usage:
+        filtered_midi_file_paths = [file for file in original_midi_file_paths if convert_to in file and "generated" not in file and "pop" not in file]
+        print(f"Number of files to process: {len(filtered_midi_file_paths)}")
+        run_parallel_infill(filtered_midi_file_paths, convert_to, context_before, context_after, context_infilling,
+                            t_segment_start, corruption_passes, corruption_name, corruption_rate, 
+                            pass_number, fusion_model, configs, novel_peaks_pct, tokenizer, decode_tokenizer, 
+                            experiment_name, max_processes_per_gpu, write_intermediate_passes, temperature, save_infilling_only)
+        
+        corruption_name = "whole_mask"
+        corruption_rate = 1.0
+        pass_number = 1
+        corruption_passes = {'pass_1': {'corruption_rate': 1.0, 'corruption_type': "whole_mask"}}
+        context_before = 4
+        context_after = 4
+        context_infilling = 2
+        t_segment_start = 5
+        novel_peaks_pct = 0
+        convert_to = "classical"
+        experiment_name = "experiment_5"
+        write_intermediate_passes = True
+        max_processes_per_gpu = 1
+        temperature = 0.97
+        save_infilling_only = True
+
+        # Example usage:
+        filtered_midi_file_paths = [file for file in original_midi_file_paths if convert_to in file and "generated" not in file and "pop" not in file]
+        print(f"Number of files to process: {len(filtered_midi_file_paths)}")
+        run_parallel_infill(filtered_midi_file_paths, convert_to, context_before, context_after, context_infilling,
+                            t_segment_start, corruption_passes, corruption_name, corruption_rate, 
+                            pass_number, fusion_model, configs, novel_peaks_pct, tokenizer, decode_tokenizer, 
+                            experiment_name, max_processes_per_gpu, write_intermediate_passes, temperature, save_infilling_only)
+        
+    if args.experiment_name == "experiment_6" or args.experiment_name == "all":
+        ################# Experiment 5: Infilling ################
+        corruption_name = "whole_mask"
+        corruption_rate = 1.0
+        pass_number = 1
+        corruption_passes = {'pass_1': {'corruption_rate': 1.0, 'corruption_type': "whole_mask"}}
+        context_before = 4
+        context_after = 0
+        context_infilling = 2
+        t_segment_start = 5
+        novel_peaks_pct = 0
+        convert_to = "jazz"
+        experiment_name = "experiment_6"
+        write_intermediate_passes = True
+        max_processes_per_gpu = 1
+        temperature = 0.97
+        save_infilling_only = True
+
+        # Example usage:
+        filtered_midi_file_paths = [file for file in original_midi_file_paths if convert_to in file and "generated" not in file and "pop" not in file]
+        print(f"Number of files to process: {len(filtered_midi_file_paths)}")
+        run_parallel_infill(filtered_midi_file_paths, convert_to, context_before, context_after, context_infilling,
+                            t_segment_start, corruption_passes, corruption_name, corruption_rate, 
+                            pass_number, fusion_model, configs, novel_peaks_pct, tokenizer, decode_tokenizer, 
+                            experiment_name, max_processes_per_gpu, write_intermediate_passes, temperature, save_infilling_only)
+        
+        corruption_name = "whole_mask"
+        corruption_rate = 1.0
+        pass_number = 1
+        corruption_passes = {'pass_1': {'corruption_rate': 1.0, 'corruption_type': "whole_mask"}}
+        context_before = 4
+        context_after = 0
+        context_infilling = 2
+        t_segment_start = 5
+        novel_peaks_pct = 0
+        convert_to = "classical"
+        experiment_name = "experiment_6"
+        write_intermediate_passes = True
+        max_processes_per_gpu = 1
+        temperature = 0.97
+        save_infilling_only = True
+
+        # Example usage:
+        filtered_midi_file_paths = [file for file in original_midi_file_paths if convert_to in file and "generated" not in file and "pop" not in file]
+        print(f"Number of files to process: {len(filtered_midi_file_paths)}")
+        run_parallel_infill(filtered_midi_file_paths, convert_to, context_before, context_after, context_infilling,
+                            t_segment_start, corruption_passes, corruption_name, corruption_rate, 
+                            pass_number, fusion_model, configs, novel_peaks_pct, tokenizer, decode_tokenizer, 
+                            experiment_name, max_processes_per_gpu, write_intermediate_passes, temperature, save_infilling_only)

@@ -23,7 +23,7 @@ sys.path.append(os.path.dirname(SCRIPT_DIR))
 from utils.utils import flatten, unflatten_corrupted, parse_generation, unflatten_for_aria, Segment_Novelty
 
 
-def refine_sequence(corrupted_sequence, tokenizer, decode_tokenizer, model, encoder_max_sequence_length, decoder_max_sequence_length):
+def refine_sequence(corrupted_sequence, tokenizer, decode_tokenizer, model, encoder_max_sequence_length, decoder_max_sequence_length, temperature=1.0):
     # Tokenize the sequence
     # input_tokens = [tokenizer[tuple(token)] if isinstance(token, list) else tokenizer[token] for token in corrupted_sequence]
     input_tokens = [tokenizer[token] for token in corrupted_sequence if token in tokenizer.keys()]
@@ -43,7 +43,7 @@ def refine_sequence(corrupted_sequence, tokenizer, decode_tokenizer, model, enco
                                     num_beams=1,
                                     early_stopping=False,
                                     do_sample=True,
-                                    temperature=1.0,
+                                    temperature=temperature,
                                     top_k=50,
                                     top_p=1.0,
                                     pad_token_id=0,
@@ -64,7 +64,7 @@ def refine_sequence(corrupted_sequence, tokenizer, decode_tokenizer, model, enco
 def generate_one_pass(tokenized_sequence, fusion_model, configs, 
                       t_segment_start, convert_to, context_before, 
                       context_after, corruption_type, corruption_rate, 
-                      tokenizer, decode_tokenizer, quiet):
+                      tokenizer, decode_tokenizer, quiet, temperature=1.0, end_original=True, t_segment_stop=-1):
 
     # Get the encoder and decoder max sequence length
     encoder_max_sequence_length = configs['model']['encoder_max_sequence_length']
@@ -76,20 +76,31 @@ def generate_one_pass(tokenized_sequence, fusion_model, configs,
     novelty_segments = [n for n, i in enumerate(separated_sequence) if '<N>' in i]
     all_segment_indices, _, _, _ = corruption_obj.get_segment_to_corrupt(separated_sequence, t_segment_ind=t_segment_start, exclude_idx=novelty_segments)
 
+    if end_original:
+        n_iterations = len(all_segment_indices) - 1
+    else:
+        n_iterations = len(all_segment_indices)
+
     t_segment_ind = t_segment_start
-    n_iterations = len(all_segment_indices) - 1
+    if t_segment_stop <= t_segment_start:
+        t_segment_stop = n_iterations
+        print("t_segment_stop is less than or equal to t_segment_start. Setting t_segment_stop to the end of the sequence.")
+
     # Initialize tqdm
     progress_bar = tqdm(total=n_iterations, disable=quiet)
     jump_every = 1
 
     while t_segment_ind < n_iterations:
 
+        if t_segment_ind >= t_segment_stop:
+            break
+
         if random.random() < corruption_rate:
             output_dict = corruption_obj.apply_random_corruption(tokenized_sequence, context_before=context_before, context_after=context_after, meta_data=[convert_to], t_segment_ind=t_segment_ind, inference=False, corruption_type=corruption_type, run_corruption=True, exclude_idx=novelty_segments)
             index = output_dict['index']
             corrupted_sequence = output_dict['corrupted_sequence']
             corrupted_sequence = unflatten_corrupted(corrupted_sequence)
-            refined_segment = refine_sequence(corrupted_sequence, tokenizer, decode_tokenizer, fusion_model, encoder_max_sequence_length, decoder_max_sequence_length)
+            refined_segment = refine_sequence(corrupted_sequence, tokenizer, decode_tokenizer, fusion_model, encoder_max_sequence_length, decoder_max_sequence_length, temperature=temperature)
             flattened_refined_segment = flatten(refined_segment, add_special_tokens=True)
             separated_sequence[index] = flattened_refined_segment
             tokenized_sequence = corruption_obj.concatenate_list(separated_sequence)
@@ -164,7 +175,7 @@ def write_file(midi_file_path, output_folder, tokenized_sequence, aria_tokenizer
 def generate(midi_file_path, audio_file_path, fusion_model, configs, novel_peaks_pct,
              t_segment_start, convert_to, context_before, context_after, 
              corruption_passes, tokenizer, decode_tokenizer, output_folder, 
-             save_original=False, quiet=False, write_intermediate_passes=False):
+             save_original=False, quiet=False, write_intermediate_passes=False, temperature=1.0, end_original=True, t_segment_stop=-1):
     
     if not os.path.exists(output_folder):
         os.makedirs(output_folder)
@@ -223,7 +234,8 @@ def generate(midi_file_path, audio_file_path, fusion_model, configs, novel_peaks
         tokenized_sequence = generate_one_pass(tokenized_sequence, fusion_model, configs, 
                                                t_segment_start, convert_to, context_before, 
                                                context_after, corruption_type, corruption_rate, 
-                                               tokenizer, decode_tokenizer, quiet)
+                                               tokenizer, decode_tokenizer, quiet, temperature=temperature, 
+                                               end_original=end_original, t_segment_stop=t_segment_stop)
 
         if write_intermediate_passes:
             pass_number = f"pass_{passes}"
@@ -289,8 +301,12 @@ if __name__ == "__main__":
     t_segment_start = configs['generation']['t_segment_start']
     novel_peaks_pct = configs['generation']['novel_peaks_pct']
     write_intermediate_passes = configs['generation']['write_intermediate_passes']
+    temperature = configs['generation']['temperature']
+    end_original = configs['generation']['end_original']
+    t_segment_stop = configs['generation']['t_segment_stop']
 
     generate(midi_file_path, audio_file_path, fusion_model, configs, novel_peaks_pct,
              t_segment_start, convert_to, context_before, context_after, 
              corruption_passes, tokenizer, decode_tokenizer, output_folder, 
-             save_original=True, quiet=False, write_intermediate_passes=write_intermediate_passes)
+             save_original=True, quiet=False, write_intermediate_passes=write_intermediate_passes, 
+             temperature=temperature, end_original=end_original, t_segment_stop=t_segment_stop)

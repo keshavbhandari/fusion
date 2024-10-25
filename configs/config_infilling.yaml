@@ -1,0 +1,78 @@
+
+model:
+  encoder_max_sequence_length: 2048
+  decoder_max_sequence_length: 512
+  encoder_num_layers: 12
+  encoder_num_heads: 8
+  encoder_hidden_size: 512
+  encoder_intermediate_size: 2048
+  decoder_num_layers: 12
+  decoder_num_heads: 8
+  decoder_hidden_size: 512
+  decoder_intermediate_size: 2048
+
+classifier_model:
+  encoder_max_sequence_length: 1024
+  encoder_num_layers: 12
+  encoder_num_heads: 8
+  encoder_hidden_size: 512
+  encoder_intermediate_size: 2048
+  encoder_dropout: 0.1
+
+training:
+  pretraining:
+    epochs: 500
+    batch_size: 4 #24
+    learning_rate: 0.0001
+    weight_decay: 0.01
+    gradient_accumulation_steps: 1
+    warmup_ratio: 0.3
+    run_name: pre_trained_model
+    run_pretraining: False
+  fine_tuning:
+    epochs: 3000
+    batch_size: 4
+    learning_rate: 0.00005
+    weight_decay: 0.01
+    gradient_accumulation_steps: 3
+    warmup_ratio: 0.1
+    run_name: fine_tuned_model
+  classifier:
+    epochs: 200
+    batch_size: 64
+    learning_rate: 0.0001
+    weight_decay: 0.01
+    gradient_accumulation_steps: 1
+    warmup_ratio: 0.2
+    run_name: classifier_model
+
+generation:
+  convert_from: classical
+  convert_to: classical # Choose from ['jazz', 'classical'].
+  midi_file_path: "/homes/kb658/fusion/input/schumann_kinderszenen_15_7_(c)harfesoft.mid"
+  wav_file_path: "/homes/kb658/fusion/input/schumann_kinderszenen_15_7_(c)harfesoft.wav"
+  novel_peaks_pct: 0.0 # Percentage of novel peaks to be preserved.
+  temperature: 0.97 # Temperature for sampling.
+  context_before: 4 # Number of context frames before the corruption segment.
+  context_after: 4 # Number of context frames after the corruption segment. In case of prompt generation, we do not need any context after the corruption segment.
+  context_infilling: 2 # Number of context frames to be filled in the corruption segment.
+  t_segment_start: 5 # Start frame of the corruption segment. Each frame is 5 seconds long. For example, 2 corresponds to 0-10 seconds which would be preserved. The model will corrupt the next segment onwards.
+  write_intermediate_passes: True # If True, the model will write the intermediate passes to the output folder.
+  save_infilling_only: True # If True, the model will save only the infilled segment.
+  passes:
+    pass_1:
+      corruption_rate: 1.0
+      corruption_type: whole_mask
+
+raw_data:
+  raw_data_folders: 
+    pre_training:
+      folder_paths: ['/import/c4dm-datasets/aria/transcriptions/atepp', '/import/c4dm-datasets/aria/transcriptions/mazurkas']
+      genre: classical
+    fine_tuning:
+      classical_folder_paths: ['/import/c4dm-datasets/maestro-v3.0.0']
+      jazz_folder_paths: ['/import/c4dm-datasets/aria/transcriptions/pijama', '/import/c4dm-datasets-ext/doug_mcenzie_jazz']
+      pop_folder_paths: ['/import/c4dm-datasets-ext/POP909']
+  build_dataset: True
+  artifact_folder: artifacts
+  eval_folder: evaluations
