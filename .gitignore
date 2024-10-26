@@ -1,4 +1,5 @@
 .DS_Store
+**/.temp/
 # Ignore cache files
 *.cache
 __pycache__/

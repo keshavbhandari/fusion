@@ -10,3 +10,6 @@ tqdm==4.66.2
 transformers==4.40.1
 pretty_midi
 # git+https://github.com/geoffroypeeters/ssmnet_ISMIR2023.git
+coloredlogs
+music21
+muspy
