@@ -4,7 +4,7 @@ import shutil
 from os import path
 import muspy
 
-from eval.tonal_tension_muspy.midi_miner.tension_calculation import calculate_tonal_tension
+from tonal_tension_muspy.midi_miner.tension_calculation import calculate_tonal_tension
 
 
 def compute_tonal_tension(midi_file: str, key: Optional[str] = "C major", print_info: bool = False) -> Dict[str, Any]:
@@ -39,10 +39,12 @@ def compute_tonal_tension(midi_file: str, key: Optional[str] = "C major", print_
     os.makedirs(temp_output_dir, exist_ok=True)
 
     # Run tension calculation command
-    times, diameter, tensile, centroid_diff, files_result = calculate_tonal_tension(file_name=midi_file,
-                                                                                    output_folder=temp_output_dir,
-                                                                                    key_name=key,
-                                                                                    key_changed=False)
+    times, diameter, tensile, centroid_diff, files_result = calculate_tonal_tension(
+        file_name=midi_file,
+        output_folder=temp_output_dir,
+        key_name=key,
+        key_changed=False
+    )
 
     # Load and print key change information from the JSON result file
     if print_info:
@@ -57,7 +59,7 @@ def compute_tonal_tension(midi_file: str, key: Optional[str] = "C major", print_
         print(f'The file has {len(diameter)} bars.')
 
     # Clean up temporary directory
-    shutil.rmtree(temp_output_dir)
+    # shutil.rmtree(temp_output_dir) # file occupied error?
 
     return {
         "times": times,

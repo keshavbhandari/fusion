@@ -27,7 +27,7 @@ def plot_tonal_tension_comparison(data1, data2, title: Optional[str] = None, sav
 
     if save_img_path:
         plt.savefig(save_img_path, bbox_inches='tight')
-    plt.show()
+    # plt.show()
 
 
 def plot_muspy_comparison(data1, data2, title: Optional[str] = None, save_img_path: Optional[str] = None):
@@ -71,4 +71,4 @@ def plot_muspy_comparison(data1, data2, title: Optional[str] = None, save_img_pa
     # Save the plot if save_img_path is provided
     if save_img_path:
         plt.savefig(save_img_path, bbox_inches='tight')
-    plt.show()
+    # plt.show()
