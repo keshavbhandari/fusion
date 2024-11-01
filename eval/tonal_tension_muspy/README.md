@@ -47,4 +47,8 @@ Guo R, Simpson I, Magnusson T, Kiefer C., Herremans D..  2020.  A variational au
   booktitle={Joint Conference on AI Music Creativity (CSMC + MuMe)},
   year={2020}
 }
+
+`muspy_metrics` are based on [MusPy](https://github.com/salu133445/muspy) project.
+
+`n_unique_chords` is based on [Chorder](https://github.com/joshuachang2311/chorder) project. 
 ```
