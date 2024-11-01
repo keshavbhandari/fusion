@@ -8,6 +8,7 @@ import pandas as pd
 import yaml
 import os
 from tqdm import tqdm
+from music21 import converter, instrument, stream, note
 import subprocess
 from concurrent.futures import ProcessPoolExecutor
 from ssmnet.core import SsmNetDeploy
@@ -428,102 +429,62 @@ def convert_midi_to_wav(filepaths, soundfont_path="../artifacts/soundfont.sf", m
                 results = list(executor.map(save_wav, filepaths, [soundfont_path]*len(filepaths)))
     return results
 
-# # Find all notes which have the same onset time before n notes and print the average ratio of same note onsets
-# def chord_density_ratio(flattened_sequence):
-#     same_onset_notes = []
-#     total_notes = 0
-#     previous_note = None
-#     match = False
-#     averages = []
-#     for i in range(len(flattened_sequence)):
-#         # if i % time_frame == 0 and i != 0:
-#         if flattened_sequence[i] == "<T>":
-#             # Calculate the average number of notes with the same onset time
-#             if total_notes == 0:
-#                 continue
-#             average = len(same_onset_notes) / total_notes
-#             average = round_to_nearest_n(average)
-#             average = ("same_onset_ratio", average)
-#             averages.append(average)
-#             same_onset_notes = []
-#             total_notes = 0
-#             continue
-#         elif type(flattened_sequence[i]) == str:
-#             continue
-#         else:
-#             if i == 0:
-#                 previous_note = flattened_sequence[i]
-#             elif i < len(flattened_sequence)-1:
-#                 onset_time = flattened_sequence[i][2]
-#                 if previous_note is None:
-#                     previous_note = flattened_sequence[i]
-#                     total_notes += 1
-#                     continue
-#                 # Look at previous note and check if the onset time is the same. If it is then add the previous note to the same_onset_notes list
-#                 elif abs(onset_time - previous_note[2]) <= 30:
-#                     same_onset_notes.append(previous_note)
-#                     previous_note = flattened_sequence[i]
-#                     total_notes += 1
-#                     match = True
-#                 else:
-#                     if match:
-#                         same_onset_notes.append(previous_note)
-#                     previous_note = flattened_sequence[i]
-#                     total_notes += 1
-#                     match = False
-#             else:
-#                 onset_time = flattened_sequence[i][2]
-#                 if previous_note is None:
-#                     previous_note = flattened_sequence[i]   
-#                 elif abs(onset_time - previous_note[2]) <= 30:
-#                     same_onset_notes.append(previous_note)
-#                     total_notes += 1
-#                 else:
-#                     if match:
-#                         same_onset_notes.append(previous_note)
-#                     total_notes += 1
 
-#     # Calculate the average number of notes with the same onset time for the last time frame
-#     if len(same_onset_notes) > 0:
-#         average = len(same_onset_notes) / total_notes
-#         average = round_to_nearest_n(average)
-#         average = ("same_onset_ratio", average)
-#         averages.append(average)
+def xml_to_monophonic_midi(musicxml_file, midi_output_file):
+    # Load the MusicXML file
+    score = converter.parse(musicxml_file)
 
-#     return averages
+    # Assuming the monophonic melody is in the first part (usually in leadsheets)
+    # You may need to adjust if the monophonic part is in a different part
+    melody_part = score.parts[0]
+
+    # Filter out any chord symbols (only keeping monophonic notes)
+    melody_notes = stream.Stream()
+    # Iterate through elements and only add individual notes, ignoring chords and other elements
+    for elem in melody_part.flat.notesAndRests:  # 'flat' allows for easier access to all notes/rests
+        if isinstance(elem, note.Note):  # Add only individual notes, no chords
+            melody_notes.append(elem)
+        elif isinstance(elem, note.Rest):  # If you want to keep rests in the melody
+            melody_notes.append(elem)
+
+    # Set the instrument to Piano
+    piano_instrument = instrument.Piano()
+    melody_notes.insert(0, piano_instrument)
+
+    # Save the melody as a MIDI file
+    melody_notes.write('midi', midi_output_file)
+
+    print(f"Monophonic melody saved as {midi_output_file}")
 
 
-# def get_note_lengths(flattened_sequence):    
-#     notes_before_t_token = []
-#     tracker = []
-#     for note in flattened_sequence:
-#         if note == "<T>":
-#             notes_before_t_token.append(len(tracker))
-#             tracker = []
-#         else:
-#             tracker.append(note)
-#     return notes_before_t_token
+def xml_to_midi(musicxml_file, midi_output_file):
+    
+    # Load the MusicXML file
+    score = converter.parse(musicxml_file)
 
-# def get_mtr(melody_notes, melody_harmony_notes):
-#     if len(melody_notes) == 0:
-#         return []
-#     elif len(melody_notes) > len(melody_harmony_notes):
-#         return []
+    # Print the part names (optional, for debugging)
+    print(f"Loaded parts: {[p.partName for p in score.parts]}")
 
-#     ratios = []
-#     for idx, n_melody in enumerate(melody_notes):
-#         n_melody_harmony = melody_harmony_notes[idx]
-#         n_melody_harmony = 1 if n_melody_harmony == 0 else n_melody_harmony
+    # Create a new stream to hold all converted parts
+    piano_score = stream.Stream()
 
-#         # Get the ratio
-#         ratio = round_to_nearest_n(n_melody / n_melody_harmony, 0.05)
-#         if ratio > 1:
-#             ratio = 1.0
-#         ratios.append(("melody_density_ratio", ratio))
-#     return ratios
+    # Loop through each part in the score
+    for part in score.parts:
+        # Create a new stream for the piano part
+        piano_part = stream.Part()
+        
+        # Set the instrument to piano (MIDI program number for acoustic piano is 0)
+        piano_instrument = instrument.Piano()
+        piano_part.insert(0, piano_instrument)
+        
+        # Add all the notes and rests from the original part to the new piano part
+        for elem in part.flat.notesAndRests:
+            piano_part.append(elem)
+        
+        # Append the piano part to the new score
+        piano_score.append(piano_part)
 
-# def get_mtr_ratio(melody_flattened_notes, flattened_notes):
-#     melody_notes = get_note_lengths(melody_flattened_notes)
-#     melody_harmony_notes = get_note_lengths(flattened_notes)
-#     ratios = get_mtr(melody_notes, melody_harmony_notes)
-#     return ratios
+    # Save the entire score as a MIDI file
+    piano_score.write('midi', midi_output_file)
+
+    print(f"All tracks saved as piano MIDI in {midi_output_file}")

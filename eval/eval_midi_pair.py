@@ -73,18 +73,18 @@ if __name__ == '__main__':
     output_gen_tension = compute_tonal_tension(args.midi_path2, args.key)
     out_tonal_tension_comparison_filename = comparison_prefix + '_tonal_tension.pdf'
     out_tonal_tension_comparison_filepath = os.path.join(args.out_dir, out_tonal_tension_comparison_filename)
-    plot_tonal_tension_comparison(
-        output_org_tension,
-        output_gen_tension,
-        title=f"Tonal Tension: {args.task} of  {output_org_tension['info']['song_name']}",
-        save_img_path=out_tonal_tension_comparison_filepath,
-    )
     # Convert key to root and mode
     # root, mode = key2muspy_dict[key]
     output_org_muspy = compute_muspy_metrics(args.midi_path1, args.key)
     output_gen_muspy = compute_muspy_metrics(args.midi_path2, args.key)
     out_muspy_comparison_filename = comparison_prefix + '_muspy_metrics.pdf'
     out_muspy_comparison_filepath = os.path.join(args.out_dir, out_muspy_comparison_filename)
+    plot_tonal_tension_comparison(
+        output_org_tension,
+        output_gen_tension,
+        title=f"Tonal Tension: {args.task} of  {output_org_tension['info']['song_name']}",
+        save_img_path=out_tonal_tension_comparison_filepath,
+    )
     plot_muspy_comparison(
         output_org_muspy,
         output_gen_muspy,

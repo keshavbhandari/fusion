@@ -25,11 +25,11 @@ from aria.tokenizer import AbsTokenizer
 from corruptions import DataCorruption
 from generation import generate
 from infill import infill
-# from classify_genre import get_genre_probabilities
+from harmonize import harmonize
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(os.path.dirname(SCRIPT_DIR))
-from utils.utils import flatten, unflatten_corrupted, parse_generation, unflatten_for_aria, Segment_Novelty, convert_midi_to_wav
+from utils.utils import convert_midi_to_wav, xml_to_midi, xml_to_monophonic_midi
 
 # Parse command line arguments
 parser = argparse.ArgumentParser()
@@ -58,7 +58,7 @@ decode_tokenizer = {v: k for k, v in tokenizer.items()}
 fusion_model = EncoderDecoderModel.from_pretrained(os.path.join(artifact_folder, "style_transfer", "fine_tuned_model"))
 fusion_model.eval()
 fusion_model.to("cuda" if cuda_available() else "cpu")
-# print("Fusion model loaded")
+print("ImprovNet model loaded")
 
 # Open pkl file
 with open(os.path.join(artifact_folder, "style_transfer", "fine_tuning_valid.pkl"), "rb") as f:
@@ -198,6 +198,50 @@ def run_generation(midi_file_paths, convert_to, context, t_segment_start,
                                             pass_number, fusion_model, configs, novel_peaks_pct, tokenizer, decode_tokenizer, experiment_name, 
                                             max_processes_per_gpu, write_intermediate_passes)
     print(f"Experiment {experiment_name} completed")
+
+
+def run_harmonize(mxl_file_paths, convert_to, context_before, context_after, corruption_passes,
+                            t_segment_start, fusion_model, configs, novel_peaks_pct, tokenizer, decode_tokenizer, 
+                            experiment_name, max_processes_per_gpu, write_intermediate_passes, use_constraints, 
+                            temperature, reharmonize, end_original):
+    
+    available_gpus = list(range(torch.cuda.device_count()))
+    
+    # Create new folders from 1 to len(mxl_file_paths) and run mxl_to_midi and mxl_to_monophonic_midi
+    for i, mxl_file_path in enumerate(mxl_file_paths):
+        # Create new folder
+        if use_constraints:
+            folder_name = os.path.join(eval_folder, "harmony", convert_to, "with_constraints", str(i))
+        else:
+            folder_name = os.path.join(eval_folder, "harmony", convert_to, "without_constraints", str(i))
+        if not os.path.exists(folder_name):
+            os.makedirs(folder_name)
+
+        # Convert mxl to midi
+        midi_output_file = 'original_' + os.path.basename(mxl_file_path).replace(".mxl", ".mid")
+        midi_output_file = os.path.join(folder_name, midi_output_file)
+        xml_to_midi(mxl_file_path, midi_output_file)
+
+        # Call the function to convert the MusicXML file to a monophonic MIDI file
+        midi_output_file = 'monophonic_' + os.path.basename(mxl_file_path).replace(".mxl", ".mid")
+        midi_output_file = os.path.join(folder_name, midi_output_file)
+        xml_to_monophonic_midi(mxl_file_path, midi_output_file)
+        
+        try:
+            harmonize(midi_output_file, None, fusion_model, configs, novel_peaks_pct,
+                    t_segment_start, convert_to, context_before, context_after, 
+                    corruption_passes, tokenizer, decode_tokenizer, folder_name, 
+                    save_original=True, quiet=False, write_intermediate_passes=write_intermediate_passes, 
+                    use_constraints=use_constraints, temperature=temperature, reharmonize=reharmonize, end_original=end_original)
+        except Exception as e:
+            print("Error in processing file: ", midi_output_file)
+            print(f"Error: {e}")
+            continue
+        
+        print(f"Progress: {i+1}/{len(mxl_file_paths)} files processed.")
+    print(f"Experiment {experiment_name} completed")
+    
+   
 
 
 ################ Write original midi files to evaluations folder ################
@@ -454,7 +498,7 @@ if __name__ == '__main__':
                             experiment_name, max_processes_per_gpu, write_intermediate_passes, temperature, save_infilling_only)
         
     if args.experiment_name == "experiment_6" or args.experiment_name == "all":
-        ################# Experiment 5: Prompt Continuation ################
+        ################# Experiment 6: Prompt Continuation ################
         corruption_name = "whole_mask"
         corruption_rate = 1.0
         pass_number = 1
@@ -502,3 +546,111 @@ if __name__ == '__main__':
                             t_segment_start, corruption_passes, corruption_name, corruption_rate, 
                             pass_number, fusion_model, configs, novel_peaks_pct, tokenizer, decode_tokenizer, 
                             experiment_name, max_processes_per_gpu, write_intermediate_passes, temperature, save_infilling_only)
+        
+    if args.experiment_name == "experiment_7" or args.experiment_name == "all":
+        ################# Experiment 7: Harmony Generation With Constraints ################
+        context_before = 5
+        context_after = 2
+        t_segment_start = 0
+        novel_peaks_pct = 0
+        convert_to = "jazz"
+        experiment_name = "experiment_7"
+        write_intermediate_passes = True
+        max_processes_per_gpu = 1
+        use_constraints = True
+        temperature = 0.97
+        reharmonize = False
+        end_original = False
+        corruption_passes = {'pass_1': {'corruption_rate': 1.0, 'corruption_type': "skyline"}, 
+                             'pass_2': {'corruption_rate': 1.0, 'corruption_type': "skyline"},
+                             'pass_3': {'corruption_rate': 1.0, 'corruption_type': "skyline"},
+                             'pass_4': {'corruption_rate': 1.0, 'corruption_type': "skyline"},
+                             'pass_5': {'corruption_rate': 1.0, 'corruption_type': "skyline"}}
+
+        # Example usage:
+        original_mxl_file_paths = glob.glob(os.path.join(eval_folder, "harmony", "mxl", "*.mxl"))
+        print(f"Number of files to process: {len(original_mxl_file_paths)}")
+        run_harmonize(original_mxl_file_paths, convert_to, context_before, context_after, corruption_passes,
+                            t_segment_start, fusion_model, configs, novel_peaks_pct, tokenizer, decode_tokenizer, 
+                            experiment_name, max_processes_per_gpu, write_intermediate_passes, use_constraints, 
+                            temperature, reharmonize, end_original)
+        
+        context_before = 5
+        context_after = 2
+        t_segment_start = 0
+        novel_peaks_pct = 0
+        convert_to = "classical"
+        experiment_name = "experiment_7"
+        write_intermediate_passes = True
+        max_processes_per_gpu = 1
+        use_constraints = True
+        temperature = 0.97
+        reharmonize = False
+        end_original = False
+        corruption_passes = {'pass_1': {'corruption_rate': 1.0, 'corruption_type': "skyline"}, 
+                             'pass_2': {'corruption_rate': 1.0, 'corruption_type': "skyline"},
+                             'pass_3': {'corruption_rate': 1.0, 'corruption_type': "skyline"},
+                             'pass_4': {'corruption_rate': 1.0, 'corruption_type': "skyline"},
+                             'pass_5': {'corruption_rate': 1.0, 'corruption_type': "skyline"}}
+
+        # Example usage:
+        original_mxl_file_paths = glob.glob(os.path.join(eval_folder, "harmony", "mxl", "*.mxl"))
+        print(f"Number of files to process: {len(original_mxl_file_paths)}")
+        run_harmonize(original_mxl_file_paths, convert_to, context_before, context_after, corruption_passes,
+                            t_segment_start, fusion_model, configs, novel_peaks_pct, tokenizer, decode_tokenizer, 
+                            experiment_name, max_processes_per_gpu, write_intermediate_passes, use_constraints, 
+                            temperature, reharmonize, end_original)
+        
+        ################# Experiment 7: Harmony Generation Without Constraints ################
+
+        context_before = 5
+        context_after = 2
+        t_segment_start = 0
+        novel_peaks_pct = 0
+        convert_to = "jazz"
+        experiment_name = "experiment_7"
+        write_intermediate_passes = True
+        max_processes_per_gpu = 1
+        use_constraints = False
+        temperature = 0.97
+        reharmonize = False
+        end_original = False
+        corruption_passes = {'pass_1': {'corruption_rate': 1.0, 'corruption_type': "skyline"}, 
+                             'pass_2': {'corruption_rate': 1.0, 'corruption_type': "skyline"},
+                             'pass_3': {'corruption_rate': 1.0, 'corruption_type': "skyline"},
+                             'pass_4': {'corruption_rate': 1.0, 'corruption_type': "skyline"},
+                             'pass_5': {'corruption_rate': 1.0, 'corruption_type': "skyline"}}
+
+        # Example usage:
+        original_mxl_file_paths = glob.glob(os.path.join(eval_folder, "harmony", "mxl", "*.mxl"))
+        print(f"Number of files to process: {len(original_mxl_file_paths)}")
+        run_harmonize(original_mxl_file_paths, convert_to, context_before, context_after, corruption_passes,
+                            t_segment_start, fusion_model, configs, novel_peaks_pct, tokenizer, decode_tokenizer, 
+                            experiment_name, max_processes_per_gpu, write_intermediate_passes, use_constraints, 
+                            temperature, reharmonize, end_original)
+        
+        context_before = 5
+        context_after = 2
+        t_segment_start = 0
+        novel_peaks_pct = 0
+        convert_to = "classical"
+        experiment_name = "experiment_7"
+        write_intermediate_passes = True
+        max_processes_per_gpu = 1
+        use_constraints = False
+        temperature = 0.97
+        reharmonize = False
+        end_original = False
+        corruption_passes = {'pass_1': {'corruption_rate': 1.0, 'corruption_type': "skyline"}, 
+                             'pass_2': {'corruption_rate': 1.0, 'corruption_type': "skyline"},
+                             'pass_3': {'corruption_rate': 1.0, 'corruption_type': "skyline"},
+                             'pass_4': {'corruption_rate': 1.0, 'corruption_type': "skyline"},
+                             'pass_5': {'corruption_rate': 1.0, 'corruption_type': "skyline"}}
+
+        # Example usage:
+        original_mxl_file_paths = glob.glob(os.path.join(eval_folder, "harmony", "mxl", "*.mxl"))
+        print(f"Number of files to process: {len(original_mxl_file_paths)}")
+        run_harmonize(original_mxl_file_paths, convert_to, context_before, context_after, corruption_passes,
+                            t_segment_start, fusion_model, configs, novel_peaks_pct, tokenizer, decode_tokenizer, 
+                            experiment_name, max_processes_per_gpu, write_intermediate_passes, use_constraints, 
+                            temperature, reharmonize, end_original)

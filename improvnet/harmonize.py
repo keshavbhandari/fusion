@@ -280,7 +280,7 @@ def write_file(midi_file_path, output_folder, tokenized_sequence, aria_tokenizer
     generated_mid.save(os.path.join(output_folder, "generated_" + filename))
 
 
-def generate(midi_file_path, audio_file_path, fusion_model, configs, novel_peaks_pct,
+def harmonize(midi_file_path, audio_file_path, fusion_model, configs, novel_peaks_pct,
              t_segment_start, convert_to, context_before, context_after, 
              corruption_passes, tokenizer, decode_tokenizer, output_folder, 
              save_original=False, quiet=False, write_intermediate_passes=False, 
@@ -369,8 +369,9 @@ def generate(midi_file_path, audio_file_path, fusion_model, configs, novel_peaks
                 new_output_folder = os.path.join(output_folder, f"pass_{i + 1}")
             write_file(midi_file_path, new_output_folder, tokenized_sequence, aria_tokenizer)
 
-    # Write the generated sequence to a MIDI file
-    write_file(midi_file_path, output_folder, tokenized_sequence, aria_tokenizer)
+    if not write_intermediate_passes:
+        # Write the generated sequence to a MIDI file
+        write_file(midi_file_path, output_folder, tokenized_sequence, aria_tokenizer)
 
 
 
@@ -430,8 +431,8 @@ if __name__ == "__main__":
     reharmonize = configs['generation']['reharmonize']
     end_original = configs['generation']['end_original']
 
-    generate(midi_file_path, audio_file_path, fusion_model, configs, novel_peaks_pct,
+    harmonize(midi_file_path, audio_file_path, fusion_model, configs, novel_peaks_pct,
              t_segment_start, convert_to, context_before, context_after, 
              corruption_passes, tokenizer, decode_tokenizer, output_folder, 
-             save_original=True, quiet=False, write_intermediate_passes=write_intermediate_passes, 
+             save_original=False, quiet=False, write_intermediate_passes=write_intermediate_passes, 
              use_constraints=use_constraints, temperature=temperature, reharmonize=reharmonize, end_original=end_original)

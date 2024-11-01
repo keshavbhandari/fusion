@@ -53,13 +53,13 @@ generation:
   wav_file_path: "" # No wav file path indicates that novel peaks will not be preserved for the harmony generation task.
   novel_peaks_pct: 0.0 # Percentage of novel peaks to be preserved.
   context_before: 5 # Number of context frames before the corruption segment. Use 5 for harmonization.
-  context_after: 4 # Number of context frames after the corruption segment. Use 2 for harmonization from scratch and 5 for reharmonization.
+  context_after: 2 # Number of context frames after the corruption segment. Use 2 for harmonization from scratch and 5 for reharmonization.
   t_segment_start: 0 # Start frame of the corruption segment. Each frame is 5 seconds long. For example, 2 corresponds to 0-10 seconds which would be preserved. The model will corrupt the next segment onwards.
-  end_original: True # If True, the model will use the original melody as the end of the harmony.
+  end_original: False # If True, the model will use the original melody as the end of the harmony.
   write_intermediate_passes: True # If True, the model will write the intermediate passes to the output folder.
   temperature: 1.0 # Temperature for sampling.
-  use_constraints: False # If True, the model will use the constraints to generate the harmony.
-  reharmonize: True # If True, the model will reharmonize the input melody.
+  use_constraints: True # If True, the model will use the constraints to generate the harmony.
+  reharmonize: False # If True, the model will reharmonize the input melody.
   passes: # We use only skyline corruption for harmony generation.
     pass_1:
       corruption_rate: 1.0
