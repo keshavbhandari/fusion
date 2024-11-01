@@ -75,7 +75,10 @@ def compute_tonal_tension(midi_file: str, key: Optional[str] = "C major", print_
     }
 
 
-def compute_muspy_metrics(midi_file: str, key: Optional[str] = "C major", print_info: bool = False) -> Dict[str, Any]:
+def compute_muspy_metrics(midi_file: str,
+                          key: Optional[str] = "C major",
+                          print_info: bool = False,
+                          ignore_chord_inv: bool = True) -> Dict[str, Any]:
     """
     Computes musical metrics from a given MIDI file using MusPy.
 
@@ -110,12 +113,32 @@ def compute_muspy_metrics(midi_file: str, key: Optional[str] = "C major", print_
     music = muspy.read(midi_file)
 
     # Calculate the number of unique chords using another chorder library
+    # FYI, we use these chord types, counted by beats:
+    #     'M': major_map,
+    #     'm': minor_map,
+    #     'o': diminished_map,
+    #     '+': augmented_map,
+    #     '7': dominant_map,
+    #     'M7': major_seventh_map,
+    #     'm7': minor_seventh_map,
+    #     'o7': diminished_seventh_map,
+    #     '/o7': half_diminished_seventh_map,
+    #     'sus2': sus_2_map,
+    #     'sus4': sus_4_map
     midi_obj = MidiFile(midi_file)
     dechorder = Dechorder()
     chords = dechorder.dechord(midi_obj)
-    unique_chords = set((chord.root_pc, chord.quality, chord.bass_pc)
-                        for chord in chords
-                        if chord.root_pc is not None and chord.quality is not None and chord.bass_pc is not None)
+    if ignore_chord_inv:
+        # ignore chord inversions
+        _unique_chords = set((chord.root_pc, chord.quality)
+                             for chord in chords
+                             if chord.root_pc is not None and chord.quality is not None and chord.bass_pc is not None)
+        # for diminished chords ('o'), any roots having the same %3 value are considered the same
+        unique_chords = {(root % 3, ctype) if ctype == 'o' else (root, ctype) for (root, ctype) in _unique_chords}
+    else:
+        unique_chords = set((chord.root_pc, chord.quality, chord.bass_pc)
+                            for chord in chords
+                            if chord.root_pc is not None and chord.quality is not None and chord.bass_pc is not None)
     n_unique_chords = len(unique_chords)
 
     return {
