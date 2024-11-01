@@ -45,7 +45,7 @@ def plot_muspy_comparison(data1, data2, title: Optional[str] = None, save_img_pa
     })
 
     categories = [
-        'pitch range', 'n pitches', 'n pitch classes', 'polyphony', 'polyphony rate', 'pitch in scale rate',
+        'pitch range', 'n pitches', 'n pitch classes', 'polyphony', 'polyphony rate', 'pitch in scale rate', 'unique chords',
         'empty beat rate', 'groove consistency'
     ]
 

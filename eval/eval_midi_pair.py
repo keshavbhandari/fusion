@@ -77,6 +77,8 @@ if __name__ == '__main__':
     # root, mode = key2muspy_dict[key]
     output_org_muspy = compute_muspy_metrics(args.midi_path1, args.key)
     output_gen_muspy = compute_muspy_metrics(args.midi_path2, args.key)
+    print(output_org_muspy)
+    print(output_gen_muspy)
     out_muspy_comparison_filename = comparison_prefix + '_muspy_metrics.pdf'
     out_muspy_comparison_filepath = os.path.join(args.out_dir, out_muspy_comparison_filename)
     plot_tonal_tension_comparison(
