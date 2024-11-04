@@ -29,6 +29,14 @@ import sys
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 sys.path.append(os.path.dirname(SCRIPT_DIR))
 from utils.utils import convert_midi_to_wav
+
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+sys.path.append(os.path.join(os.path.dirname(SCRIPT_DIR), "eval"))
+from eval.midi_obj_eval.single_midi_eval import evaluate_single_midi, compare_single_midi_metrics
+from eval.midi_obj_eval.single_midi_eval import plot_pitch_class_histogram_pair, plot_pitch_class_transition_matrix_pair
+from eval.tonal_tension_muspy.metrics import compute_tonal_tension, compute_muspy_metrics
+from eval.tonal_tension_muspy.plot import plot_tonal_tension_comparison, plot_muspy_comparison
+
 torch.set_num_threads(6)
 torch.set_num_interop_threads(6)
 
@@ -270,8 +278,10 @@ if __name__ == "__main__":
 
     # Parse command line arguments
     parser = argparse.ArgumentParser()
-    parser.add_argument("--config", type=str, default=os.path.normpath("configs/configs_style_transfer.yaml"),
+    parser.add_argument("--config", type=str, default=os.path.normpath("configs/config_style_transfer.yaml"),
                         help="Path to the config file")
+    parser.add_argument("--experiment_name", type=str, default="all",
+                    help="Name of the experiment")
     args = parser.parse_args()
 
     # Load config file
@@ -282,99 +292,142 @@ if __name__ == "__main__":
     raw_data_folders = configs["raw_data"]["raw_data_folders"]
     eval_folder = configs["raw_data"]["eval_folder"]
 
-    # Get the encoder max sequence length
-    encoder_max_sequence_length = configs['classifier_model']['encoder_max_sequence_length']
+    if args.experiment_name == "experiment_1" or args.experiment_name == "all":
 
-    # Get tokenizer
-    tokenizer_filepath = os.path.join(artifact_folder, "style_transfer", "vocab_corrupted.pkl")
-    # Load the tokenizer dictionary
-    with open(tokenizer_filepath, "rb") as f:
-        tokenizer = pickle.load(f)
+        # Get the encoder max sequence length
+        encoder_max_sequence_length = configs['classifier_model']['encoder_max_sequence_length']
 
-    aria_tokenizer = AbsTokenizer()
+        # Get tokenizer
+        tokenizer_filepath = os.path.join(artifact_folder, "style_transfer", "vocab_corrupted.pkl")
+        # Load the tokenizer dictionary
+        with open(tokenizer_filepath, "rb") as f:
+            tokenizer = pickle.load(f)
 
-    # # Open the test set files
-    # with open(os.path.join(artifact_folder, "style_transfer", "fine_tuning_valid.pkl"), "rb") as f:
-    #     valid_sequences = pickle.load(f)
+        aria_tokenizer = AbsTokenizer()
 
-    # Load the model
-    model_path = os.path.join(artifact_folder, "style_transfer", "classifier_model")
-    model = AutoModelForSequenceClassification.from_pretrained(model_path)
-    model.eval()
-    print("Genre classifier model loaded")
+        # Load the model
+        model_path = os.path.join(artifact_folder, "style_transfer", "classifier_model")
+        model = AutoModelForSequenceClassification.from_pretrained(model_path)
+        model.eval()
+        print("Genre classifier model loaded")
 
-    clap_model = ClapModel.from_pretrained("laion/larger_clap_music_and_speech")
-    clap_model.eval()
-    processor = AutoProcessor.from_pretrained("laion/larger_clap_music_and_speech")
-    print("CLAP model loaded")
+        clap_model = ClapModel.from_pretrained("laion/larger_clap_music_and_speech")
+        clap_model.eval()
+        processor = AutoProcessor.from_pretrained("laion/larger_clap_music_and_speech")
+        print("CLAP model loaded")
 
-    # Load the dataset
-    dataset_obj = Genre_Classifier_Dataset(configs, data_list=[], mode="eval", shuffle=False)
+        # Load the dataset
+        dataset_obj = Genre_Classifier_Dataset(configs, data_list=[], mode="eval", shuffle=False)
 
-    # Get file paths of the original and generated midi files from eval_folder
-    all_midi_files = glob.glob(os.path.join(eval_folder, "**/*.mid"), recursive=True)
-    original_midi_file_paths = [f for f in all_midi_files if "generated" not in f and "pop" not in f]
-    # # Split original_midi_file_paths into 5 parts
-    # original_midi_file_paths_splits = [original_midi_file_paths[i:i + len(original_midi_file_paths)//4] for i in range(0, len(original_midi_file_paths), len(original_midi_file_paths)//4)]
-    # original_midi_file_paths = original_midi_file_paths_splits[3]
-    # Filter out all files from 0 until the specified file
-    # filter_until = "evaluations/classical/34/original_34.mid"
-    # original_midi_file_paths = original_midi_file_paths[original_midi_file_paths.index(filter_until):]
-    generated_midi_file_paths = [f for f in all_midi_files if "generated" in f and "pop" not in f]
-    # generated_midi_file_paths = [f for f in generated_midi_file_paths if "experiment_3" in f or "experiment_4" in f]
-    print("Number of original midi files: ", len(original_midi_file_paths))
-    print("Number of generated midi files: ", len(generated_midi_file_paths))
+        # Get file paths of the original and generated midi files from eval_folder
+        all_midi_files = glob.glob(os.path.join(eval_folder, "**/*.mid"), recursive=True)
+        original_midi_file_paths = [f for f in all_midi_files if "generated" not in f and "pop" not in f and "harmony" not in f and "experiment_5" not in f and "experiment_6" not in f]
+        # # Split original_midi_file_paths into 5 parts
+        # original_midi_file_paths_splits = [original_midi_file_paths[i:i + len(original_midi_file_paths)//4] for i in range(0, len(original_midi_file_paths), len(original_midi_file_paths)//4)]
+        # original_midi_file_paths = original_midi_file_paths_splits[3]
+        # Filter out all files from 0 until the specified file
+        # filter_until = "evaluations/classical/34/original_34.mid"
+        # original_midi_file_paths = original_midi_file_paths[original_midi_file_paths.index(filter_until):]
+        generated_midi_file_paths = [f for f in all_midi_files if "generated" in f and "pop" not in f and "harmony" not in f and "experiment_5" not in f and "experiment_6" not in f]
+        # generated_midi_file_paths = [f for f in generated_midi_file_paths if "experiment_3" in f or "experiment_4" in f]
+        print("Number of original midi files: ", len(original_midi_file_paths))
+        print("Number of generated midi files: ", len(generated_midi_file_paths))
 
-    for original_midi_file_path in original_midi_file_paths:
-        matching_generation_file_paths = [f for f in generated_midi_file_paths if os.path.join(os.path.dirname(original_midi_file_path), "experiment_") in f]
-        original_genre_probs = get_genre_probabilities(original_midi_file_path, tokenizer, model, dataset_obj, encoder_max_sequence_length, aria_tokenizer, verbose=False)
-        for generated_midi_file_path in tqdm(matching_generation_file_paths):
+        for original_midi_file_path in original_midi_file_paths:
+            matching_generation_file_paths = [f for f in generated_midi_file_paths if os.path.join(os.path.dirname(original_midi_file_path), "experiment_") in f]
+            original_genre_probs = get_genre_probabilities(original_midi_file_path, tokenizer, model, dataset_obj, encoder_max_sequence_length, aria_tokenizer, verbose=False)
+            for generated_midi_file_path in tqdm(matching_generation_file_paths):
 
-            generated_midi_folder = os.path.dirname(generated_midi_file_path)
-            print("Processing: ", generated_midi_file_path)
+                generated_midi_folder = os.path.dirname(generated_midi_file_path)
+                print("Processing: ", generated_midi_file_path)
 
-            # Check if the metrics file already exists
-            if os.path.exists(os.path.join(generated_midi_folder, "metrics.json")):
-                print("Metrics file already exists")
-                continue
+                # Check if the metrics file already exists
+                if os.path.exists(os.path.join(generated_midi_folder, "metrics.json")):
+                    print("Metrics file already exists")
+                    continue
 
-            generated_genre_probs = get_genre_probabilities(generated_midi_file_path, tokenizer, model, dataset_obj, encoder_max_sequence_length, aria_tokenizer, verbose=False)
+                generated_genre_probs = get_genre_probabilities(generated_midi_file_path, tokenizer, model, dataset_obj, encoder_max_sequence_length, aria_tokenizer, verbose=False)
 
-            # Convert the midi files to wav
-            original_wav_file = original_midi_file_path.replace(".mid", ".wav")
-            generated_wav_file = convert_midi_to_wav([generated_midi_file_path], "/homes/kb658/fusion/artifacts/soundfont.sf", max_workers=1, verbose=False)
-            generated_wav_file = generated_wav_file[0]
-            print("Wav file created")
+                # Convert the midi files to wav
+                original_wav_file = original_midi_file_path.replace(".mid", ".wav")
+                generated_wav_file = convert_midi_to_wav([generated_midi_file_path], "/homes/kb658/fusion/artifacts/soundfont.sf", max_workers=1, verbose=False)
+                generated_wav_file = generated_wav_file[0]
+                print("Wav file created")
 
-            # Get the similarity matrices
-            try:
-                ssm_score, chroma_score = compare_similarity_matrices(original_wav_file, generated_wav_file, verbose=False)
-            except Exception as e:
-                ssm_score, chroma_score = None, None
-            print("Similarity matrices calculated")
+                # Get the similarity matrices
+                try:
+                    ssm_score, chroma_score = compare_similarity_matrices(original_wav_file, generated_wav_file, verbose=False)
+                except Exception as e:
+                    ssm_score, chroma_score = None, None
+                print("Similarity matrices calculated")
 
-            # # Get the CLAP similarity scores
-            # original_clap_score = compare_clap_similarity_score(original_wav_file, clap_model, processor, verbose=False)
-            # generated_clap_score = compare_clap_similarity_score(generated_wav_file, clap_model, processor, verbose=False)
-            # print("CLAP similarity scores calculated")
+                # # Get the CLAP similarity scores
+                # original_clap_score = compare_clap_similarity_score(original_wav_file, clap_model, processor, verbose=False)
+                # generated_clap_score = compare_clap_similarity_score(generated_wav_file, clap_model, processor, verbose=False)
+                # print("CLAP similarity scores calculated")
 
-            metrics = {
-                "Original Genre Probabilities": original_genre_probs,
-                "Generated Genre Probabilities": generated_genre_probs,
-                "SSM Similarity Score": ssm_score,
-                "Chroma Frame Similarity Score": chroma_score,
-                # "Original CLAP Score": original_clap_score,
-                # "Generated CLAP Score": generated_clap_score
-            }
+                metrics = {
+                    "Original Genre Probabilities": original_genre_probs,
+                    "Generated Genre Probabilities": generated_genre_probs,
+                    "SSM Similarity Score": ssm_score,
+                    "Chroma Frame Similarity Score": chroma_score,
+                    # "Original CLAP Score": original_clap_score,
+                    # "Generated CLAP Score": generated_clap_score
+                }
 
-            # Save the metrics as a JSON file
-            with open(os.path.join(generated_midi_folder, "metrics.json"), "w") as f:
-                json.dump(metrics, f)
+                # Save the metrics as a JSON file
+                with open(os.path.join(generated_midi_folder, "metrics.json"), "w") as f:
+                    json.dump(metrics, f)
 
-            # Delete the generated wav file
-            os.remove(generated_wav_file)
+                # Delete the generated wav file
+                os.remove(generated_wav_file)
 
-            # Clear GPU memory
-            torch.cuda.empty_cache()
+                # Clear GPU memory
+                torch.cuda.empty_cache()
 
-    print("Evaluation completed")
+        print("Evaluation completed")
+
+
+    if args.experiment_name == "experiment_2" or args.experiment_name == "all":
+
+        all_midi_files = glob.glob(os.path.join(eval_folder, "harmony", "**/*.mid"), recursive=True)
+        original_midi_file_paths = [f for f in all_midi_files if "generated" not in f and "harmony" in f and "monophonic" not in f]
+        monophonic_original_midi_file_paths = [f for f in all_midi_files if "generated" not in f and "harmony" in f and "monophonic" in f]
+        generated_midi_file_paths = [f for f in all_midi_files if "generated" in f and "harmony" in f]
+
+        print("Number of original midi files: ", len(original_midi_file_paths))
+        print("Number of generated midi files: ", len(generated_midi_file_paths))
+
+        for original_midi_file_path in original_midi_file_paths:
+            matching_generation_file_paths = [f for f in generated_midi_file_paths if os.path.join(os.path.dirname(original_midi_file_path), "pass_") in f]
+            matching_monophonic_original_midi_file_paths = [f for f in monophonic_original_midi_file_paths if os.path.dirname(original_midi_file_path) in f]
+
+            original_metrics = evaluate_single_midi(original_midi_file_path, return_numpy=False)
+            original_monophonic_metrics = evaluate_single_midi(matching_monophonic_original_midi_file_paths[0], return_numpy=False)
+            output_org_muspy = compute_muspy_metrics(original_midi_file_path, key="")
+
+            for generated_midi_file_path in tqdm(matching_generation_file_paths):
+
+                generated_midi_folder = os.path.dirname(generated_midi_file_path)
+                print("Processing: ", generated_midi_file_path)
+                
+                generated_metrics = evaluate_single_midi(generated_midi_file_path, return_numpy=False)
+                metric_pairs = compare_single_midi_metrics(original_metrics, generated_metrics)
+                monophonic_metric_pairs = compare_single_midi_metrics(original_monophonic_metrics, generated_metrics)
+                output_gen_muspy = compute_muspy_metrics(generated_midi_file_path, key="")
+
+                # Combine the metrics dictionaries
+                objective_metrics = {
+                    "Metric Pairs": metric_pairs,
+                    "Monophonic Metric Pairs": monophonic_metric_pairs,
+                    "Original MusPy Metrics": output_org_muspy,
+                    "Generated MusPy Metrics": output_gen_muspy
+                }
+                
+                # Save the metrics as a JSON file
+                with open(os.path.join(generated_midi_folder, "metrics.json"), "w") as f:
+                    json.dump(objective_metrics, f)
+                print("Metrics saved in: ", generated_midi_folder)
+
+        print("Evaluation completed")
+                
