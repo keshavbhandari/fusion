@@ -14,6 +14,16 @@ def get_num_notes(pretty_midi_features):
     piano_roll = pretty_midi_features.instruments[0].get_piano_roll(fs=100)
     return piano_roll.sum()
 
+def get_note_density(pretty_midi_features, fs = 100, hop_sec = 5): # num notes per secend
+    piano_roll = pretty_midi_features.instruments[0].get_piano_roll(fs=fs)
+    onset_roll = (piano_roll[:, :-1] - piano_roll[:, 1:]) > 0
+    num_chunks = onset_roll.shape[-1] // (hop_sec * fs)
+    onset_roll_chunked = np.array_split(onset_roll, num_chunks, axis=1)
+    note_density_chunked = [
+        np.sum(onset_roll_segment) / onset_roll_segment.shape[1] * fs for onset_roll_segment in onset_roll_chunked
+    ]
+    return sum(note_density_chunked) / len(note_density_chunked)
+
 def get_used_pitch(pretty_midi_features):
     """
     total_used_pitch (Pitch count): The number of different pitches within a sample.

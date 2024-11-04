@@ -2,9 +2,10 @@ import os
 import json
 import argparse
 import numpy as np
+from numpy import linalg
 from midi_obj_eval.core import PITCH_CLASSES
 from midi_obj_eval.core import extract_pretty_midi_features
-from midi_obj_eval.core import get_num_notes, get_used_pitch, get_pitch_class_histogram
+from midi_obj_eval.core import get_num_notes, get_note_density, get_used_pitch, get_pitch_class_histogram
 from midi_obj_eval.core import get_pitch_class_transition_matrix
 from midi_obj_eval.core import get_avg_ioi
 import matplotlib.pyplot as plt
@@ -12,12 +13,14 @@ import matplotlib.pyplot as plt
 def evaluate_single_midi(midi_filepath, return_numpy = False):
     pretty_midi_features = extract_pretty_midi_features(midi_filepath)
     num_notes = get_num_notes(pretty_midi_features)
+    note_density = get_note_density(pretty_midi_features)
     used_pitch = get_used_pitch(pretty_midi_features)
     pitch_class_histogram = get_pitch_class_histogram(pretty_midi_features)
     pitch_class_transition_matrix = get_pitch_class_transition_matrix(pretty_midi_features, normalize=2)
     avg_ioi = get_avg_ioi(pretty_midi_features)
     metrics = {
         'num_notes': num_notes,
+        'note_density': note_density,
         'used_pitch': used_pitch,
         'pitch_class_histogram': pitch_class_histogram,
         'pitch_class_transition_matrix': pitch_class_transition_matrix,
@@ -49,6 +52,11 @@ def kl_div_discrete(dist1: np.ndarray, dist2: np.ndarray, epsilon=1e-5):
     dist2 = dist2 + epsilon
     return np.sum(dist1 * np.log(dist1 / dist2))
 
+def cosine_similarity(a: np.ndarray, b: np.ndarray):
+    dot_prod = np.abs((a * b).sum())
+    norms_prod = linalg.norm(a, 'fro') * linalg.norm(b, 'fro')
+    return dot_prod / norms_prod
+
 def compare_single_midi_metrics(metrics1, metrics2):
     metric_pairs = {}
     for key in metrics1.keys():
@@ -59,6 +67,11 @@ def compare_single_midi_metrics(metrics1, metrics2):
                 np.array(metrics1[key]),
                 np.array(metrics2[key]),
             )
+        elif key == 'pitch_class_transition_matrix':
+            metric_pairs["pctm_cosine_sim"] = cosine_similarity(
+                np.array(metrics1[key]),
+                np.array(metrics2[key]),
+            ).mean()
     return metric_pairs
 
 def plot_pitch_class_histogram_pair(pitch_class_histogram_pair, save_path, names = (None, None)):
