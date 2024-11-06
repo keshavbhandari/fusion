@@ -11,13 +11,10 @@ def extract_pretty_midi_features_multiple(midi_filepaths):
     return [extract_pretty_midi_features(midi_filepath) for midi_filepath in midi_filepaths]
 
 def get_num_notes(pretty_midi_features):
-    # piano_roll = pretty_midi_features.instruments[0].get_piano_roll(fs=100)
-    # return piano_roll.sum()
     get_onsets = pretty_midi_features.get_onsets()
     return len(get_onsets)
 
 def get_note_density(pretty_midi_features, interval=5.0):
-    
     # Total duration of the song
     total_duration = pretty_midi_features.get_end_time()
     
