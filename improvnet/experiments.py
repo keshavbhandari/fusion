@@ -21,6 +21,7 @@ from transformers import EncoderDecoderModel
 from torch.cuda import is_available as cuda_available
 from aria.data.midi import MidiDict
 from aria.tokenizer import AbsTokenizer
+import pretty_midi
 
 from corruptions import DataCorruption
 from generation import generate
@@ -33,7 +34,7 @@ from utils.utils import convert_midi_to_wav, xml_to_midi, xml_to_monophonic_midi
 
 # Parse command line arguments
 parser = argparse.ArgumentParser()
-parser.add_argument("--config", type=str, default=os.path.normpath("configs/configs_style_transfer.yaml"),
+parser.add_argument("--config", type=str, default=os.path.normpath("configs/config_style_transfer.yaml"),
                     help="Path to the config file")
 parser.add_argument("--experiment_name", type=str, default="all",
                     help="Name of the experiment")
@@ -240,7 +241,58 @@ def run_harmonize(mxl_file_paths, convert_to, context_before, context_after, cor
         
         print(f"Progress: {i+1}/{len(mxl_file_paths)} files processed.")
     print(f"Experiment {experiment_name} completed")
-    
+
+
+def load_midi(file_path):
+    return pretty_midi.PrettyMIDI(file_path)
+
+def is_chord(note_events):
+    return len(note_events) > 1
+
+def modify_chord(chord_notes):
+    # Sort notes by pitch in descending order
+    chord_notes.sort(key=lambda note: note.pitch, reverse=True)
+    highest_pitch = chord_notes[0].pitch
+
+    # Keep highest pitch the same, change others within range
+    for note in chord_notes[1:]:
+        note.pitch += random.randint(-12, 12)
+
+    # Ensure highest pitch note remains the same
+    chord_notes[0].pitch = highest_pitch
+
+def process_midi(file_path, output_path):
+    midi_data = load_midi(file_path)
+    for instrument in midi_data.instruments:
+        if instrument.is_drum:
+            continue
+        
+        active_notes = []
+        for note in instrument.notes:
+            # Check if current notes are overlapping (part of a chord)
+            if active_notes and note.start < active_notes[-1].end:
+                active_notes.append(note)
+            else:
+                # Process the current chord
+                if is_chord(active_notes):
+                    modify_chord(active_notes)
+                active_notes = [note]  # Start a new chord
+        
+        # Modify any remaining chord after loop
+        if is_chord(active_notes):
+            modify_chord(active_notes)
+
+    # Write out the modified MIDI file
+    midi_data.write(output_path)
+    print(f"Modified MIDI saved to: {output_path}")
+
+def run_harmonize_random_notes(midi_file_paths):
+    for midi_file_path in tqdm(midi_file_paths):
+        output_folder = os.path.dirname(midi_file_path)
+        output_path = os.path.join(output_folder, "random_chords.mid")
+        process_midi(midi_file_path, output_path)
+        print(f"Processed file: {midi_file_path}")
+    print("All MIDI files processed")
    
 
 
@@ -654,3 +706,10 @@ if __name__ == '__main__':
                             t_segment_start, fusion_model, configs, novel_peaks_pct, tokenizer, decode_tokenizer, 
                             experiment_name, max_processes_per_gpu, write_intermediate_passes, use_constraints, 
                             temperature, reharmonize, end_original)
+
+        ################# Experiment 7: Harmony Generation With Random Chords ################
+        
+        original_midi_file_paths = glob.glob(os.path.join(eval_folder, "harmony", "**", "*.mid"), recursive=True)
+        original_midi_file_paths = [file for file in original_midi_file_paths if "with_constraints" in file and "pass_" in file]
+        print(f"Number of files to process: {len(original_midi_file_paths)}")
+        run_harmonize_random_notes(original_midi_file_paths)

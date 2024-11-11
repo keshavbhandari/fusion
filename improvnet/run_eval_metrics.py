@@ -391,20 +391,25 @@ if __name__ == "__main__":
     if args.experiment_name == "experiment_2" or args.experiment_name == "all":
 
         all_midi_files = glob.glob(os.path.join(eval_folder, "harmony", "**/*.mid"), recursive=True)
-        original_midi_file_paths = [f for f in all_midi_files if "generated" not in f and "harmony" in f and "monophonic" not in f]
-        monophonic_original_midi_file_paths = [f for f in all_midi_files if "generated" not in f and "harmony" in f and "monophonic" in f]
-        generated_midi_file_paths = [f for f in all_midi_files if "generated" in f and "harmony" in f]
+        original_midi_file_paths = [f for f in all_midi_files if "generated" not in f and "monophonic" not in f and "random_chords" not in f]
+        monophonic_original_midi_file_paths = [f for f in all_midi_files if "generated" not in f and "original_monophonic" in f]
+        generated_midi_file_paths = [f for f in all_midi_files if "generated" in f]
+        random_chords_midi_file_paths = [f for f in all_midi_files if "random_chords" in f]
 
         print("Number of original midi files: ", len(original_midi_file_paths))
         print("Number of generated midi files: ", len(generated_midi_file_paths))
+        print("Number of monophonic original midi files: ", len(monophonic_original_midi_file_paths))
+        print("Number of random chords midi files: ", len(random_chords_midi_file_paths))
 
         for original_midi_file_path in original_midi_file_paths:
             matching_generation_file_paths = [f for f in generated_midi_file_paths if os.path.join(os.path.dirname(original_midi_file_path), "pass_") in f]
+            matching_random_chords_file_paths = [f for f in random_chords_midi_file_paths if os.path.join(os.path.dirname(original_midi_file_path), "pass_") in f]
             matching_monophonic_original_midi_file_paths = [f for f in monophonic_original_midi_file_paths if os.path.dirname(original_midi_file_path) in f]
 
-            original_metrics = evaluate_single_midi(original_midi_file_path, return_numpy=False)
+            original_metrics = evaluate_single_midi(original_midi_file_path, return_numpy=False)            
             original_monophonic_metrics = evaluate_single_midi(matching_monophonic_original_midi_file_paths[0], return_numpy=False)
             output_org_muspy = compute_muspy_metrics(original_midi_file_path, key="")
+            output_org_tension = compute_tonal_tension(original_midi_file_path, key="")
 
             for generated_midi_file_path in tqdm(matching_generation_file_paths):
 
@@ -415,13 +420,20 @@ if __name__ == "__main__":
                 metric_pairs = compare_single_midi_metrics(original_metrics, generated_metrics)
                 monophonic_metric_pairs = compare_single_midi_metrics(original_monophonic_metrics, generated_metrics)
                 output_gen_muspy = compute_muspy_metrics(generated_midi_file_path, key="")
+                output_gen_tension = compute_tonal_tension(generated_midi_file_path, key="")
 
                 # Combine the metrics dictionaries
                 objective_metrics = {
                     "Metric Pairs": metric_pairs,
                     "Monophonic Metric Pairs": monophonic_metric_pairs,
                     "Original MusPy Metrics": output_org_muspy,
-                    "Generated MusPy Metrics": output_gen_muspy
+                    "Generated MusPy Metrics": output_gen_muspy,
+                    "Original Tonal Tension Diameter": np.mean(output_org_tension['diameter']),
+                    "Generated Tonal Tension Diameter": np.mean(output_gen_tension['diameter']),
+                    "Original Tonal Tension Tensile": np.mean(output_org_tension['tensile']),
+                    "Generated Tonal Tension Tensile": np.mean(output_gen_tension['tensile']),
+                    "Original Tonal Tension Centroid Diff": np.mean(output_org_tension['centroid_diff']),
+                    "Generated Tonal Tension Centroid Diff": np.mean(output_gen_tension['centroid_diff']),
                 }
                 
                 # Save the metrics as a JSON file
@@ -429,5 +441,66 @@ if __name__ == "__main__":
                     json.dump(objective_metrics, f)
                 print("Metrics saved in: ", generated_midi_folder)
 
-        print("Evaluation completed")
+            for random_chords_midi_file_path in matching_random_chords_file_paths:
+                generated_metrics = evaluate_single_midi(random_chords_midi_file_path, return_numpy=False)
+                metric_pairs = compare_single_midi_metrics(original_metrics, generated_metrics)
+                monophonic_metric_pairs = compare_single_midi_metrics(original_monophonic_metrics, generated_metrics)
+                output_gen_muspy = compute_muspy_metrics(random_chords_midi_file_path, key="")
+                output_gen_tension = compute_tonal_tension(random_chords_midi_file_path, key="")
+
+                # Combine the metrics dictionaries
+                objective_metrics = {
+                    "Metric Pairs": metric_pairs,
+                    "Monophonic Metric Pairs": monophonic_metric_pairs,
+                    "Original MusPy Metrics": output_org_muspy,
+                    "Generated MusPy Metrics": output_gen_muspy,
+                    "Original Tonal Tension Diameter": np.mean(output_org_tension['diameter']),
+                    "Generated Tonal Tension Diameter": np.mean(output_gen_tension['diameter']),
+                    "Original Tonal Tension Tensile": np.mean(output_org_tension['tensile']),
+                    "Generated Tonal Tension Tensile": np.mean(output_gen_tension['tensile']),
+                    "Original Tonal Tension Centroid Diff": np.mean(output_org_tension['centroid_diff']),
+                    "Generated Tonal Tension Centroid Diff": np.mean(output_gen_tension['centroid_diff']),
+                }
                 
+                # Save the metrics as a JSON file
+                with open(os.path.join(os.path.dirname(random_chords_midi_file_path), "random_chords_metrics.json"), "w") as f:
+                    json.dump(objective_metrics, f)
+                print("Metrics saved in: ", os.path.dirname(random_chords_midi_file_path))
+
+        print("Evaluation completed")
+    
+    if args.experiment_name == "experiment_3" or args.experiment_name == "all":
+
+        all_midi_files = glob.glob(os.path.join(eval_folder, "**/*.mid"), recursive=True)
+        original_midi_file_paths = [f for f in all_midi_files if "generated" not in f and ("experiment_5" in f or "experiment_6" in f) and "original_segment" in f]
+        generated_midi_file_paths = [f for f in all_midi_files if "generated" in f and ("experiment_5" in f or "experiment_6" in f) and "amt" not in f]
+        amt_generated_midi_file_paths = [f for f in all_midi_files if "amt" in f and ("experiment_5" in f or "experiment_6" in f)]
+        print("Number of original midi files: ", len(original_midi_file_paths))
+        print("Number of generated midi files: ", len(generated_midi_file_paths))
+        print("Number of amt generated midi files: ", len(amt_generated_midi_file_paths))
+              
+        for original_midi_file_path in original_midi_file_paths:
+            matching_generation_file_paths = [f for f in generated_midi_file_paths if os.path.dirname(original_midi_file_path) in f and "generated" in f]
+            matching_amt_generation_file_paths = [f for f in amt_generated_midi_file_paths if os.path.dirname(original_midi_file_path) in f and "amt" in f]
+            generated_midi_folder = os.path.dirname(matching_generation_file_paths[0])
+            print("Processing: ", generated_midi_folder)
+
+            original_metrics = evaluate_single_midi(original_midi_file_path, return_numpy=False)
+            generated_metrics = evaluate_single_midi(matching_generation_file_paths[0], return_numpy=False)
+            metric_pairs = compare_single_midi_metrics(original_metrics, generated_metrics)
+            
+            if len(matching_amt_generation_file_paths) > 0:
+                amt_generated_metrics = evaluate_single_midi(matching_amt_generation_file_paths[0], return_numpy=False)
+                amt_metric_pairs = compare_single_midi_metrics(original_metrics, amt_generated_metrics)
+
+                # Save the amt metrics as a JSON file
+                with open(os.path.join(generated_midi_folder, "amt_metrics.json"), "w") as f:
+                    json.dump(amt_metric_pairs, f)
+
+            # Save the metrics as a JSON file
+            with open(os.path.join(generated_midi_folder, "metrics.json"), "w") as f:
+                json.dump(metric_pairs, f)
+
+            print("Metrics saved in: ", generated_midi_folder)
+
+        print("Evaluation completed")
