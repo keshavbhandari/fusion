@@ -84,7 +84,7 @@ def generate_one_pass(tokenized_sequence, fusion_model, configs,
     t_segment_ind = t_segment_start
     if t_segment_stop <= t_segment_start:
         t_segment_stop = n_iterations
-        print("t_segment_stop is less than or equal to t_segment_start. Setting t_segment_stop to the end of the sequence.")
+        # print("t_segment_stop is less than or equal to t_segment_start. Setting t_segment_stop to the end of the sequence.")
 
     # Initialize tqdm
     progress_bar = tqdm(total=n_iterations, disable=quiet)

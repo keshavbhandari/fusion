@@ -9,7 +9,7 @@ from chorder import Dechorder
 from tonal_tension_muspy.midi_miner.tension_calculation import calculate_tonal_tension
 
 
-def compute_tonal_tension(midi_file: str, key: Optional[str] = "C major", print_info: bool = False) -> Dict[str, Any]:
+def compute_tonal_tension(midi_file: str, key: Optional[str] = "C major", print_info: bool = False, win_sz: int = -1) -> Dict[str, Any]:
     """
     Computes tonal tension metrics from a given MIDI file.
 
@@ -17,6 +17,7 @@ def compute_tonal_tension(midi_file: str, key: Optional[str] = "C major", print_
         midi_file (str): Path to the MIDI file.
         key (Optional[str]): The key signature of the song (default is "C major").
         print_info (bool): Flag to print information about the song (default is True).
+        win_sz (int): The window size for calculating the tonal tension (default is -1, which uses the default window size).
 
     Returns:
         Dict[str, Any]: A dictionary containing the following computed metrics:
@@ -44,7 +45,8 @@ def compute_tonal_tension(midi_file: str, key: Optional[str] = "C major", print_
     times, diameter, tensile, centroid_diff, files_result = calculate_tonal_tension(file_name=midi_file,
                                                                                     output_folder=temp_output_dir,
                                                                                     key_name=key,
-                                                                                    key_changed=False)
+                                                                                    key_changed=False,
+                                                                                    win_sz=win_sz)
 
     # Load and print key change information from the JSON result file
     if print_info:

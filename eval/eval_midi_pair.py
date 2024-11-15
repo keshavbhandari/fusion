@@ -1,6 +1,7 @@
 import os
 import json
 import argparse
+import numpy as np
 from midi_obj_eval.single_midi_eval import evaluate_single_midi, compare_single_midi_metrics
 from midi_obj_eval.single_midi_eval import plot_pitch_class_histogram_pair, plot_pitch_class_transition_matrix_pair
 from tonal_tension_muspy.metrics import compute_tonal_tension, compute_muspy_metrics
@@ -46,16 +47,14 @@ if __name__ == '__main__':
     metric_pairs = compare_single_midi_metrics(metrics1, metrics2)
 
     comparison_prefix = midi_name1 + '_vs_' + midi_name2
-    out_json_filename = comparison_prefix + '_metrics.json'
+    # out_json_filename = comparison_prefix + '_metrics.json'
+    out_json_filename = 'metrics.json'
     out_pctm_filename = comparison_prefix + '_pctm.pdf'
     out_pitch_hist_filename = comparison_prefix + '_pitch_hist.pdf'
 
     out_json_filepath = os.path.join(args.out_dir, out_json_filename)
     out_pctm_filepath = os.path.join(args.out_dir, out_pctm_filename)
     out_pitch_hist_filepath = os.path.join(args.out_dir, out_pitch_hist_filename)
-
-    with open(out_json_filepath, "w") as outfile:
-        json.dump(metric_pairs, outfile)
 
     plot_pitch_class_transition_matrix_pair(
         metric_pairs["pitch_class_transition_matrix"],
@@ -69,16 +68,14 @@ if __name__ == '__main__':
     )
 
     # tonal tension metrics
-    output_org_tension = compute_tonal_tension(args.midi_path1, args.key)
-    output_gen_tension = compute_tonal_tension(args.midi_path2, args.key)
+    output_org_tension = compute_tonal_tension(args.midi_path1, args.key, print_info=False, win_sz=4)
+    output_gen_tension = compute_tonal_tension(args.midi_path2, args.key, print_info=False, win_sz=4)
     out_tonal_tension_comparison_filename = comparison_prefix + '_tonal_tension.pdf'
     out_tonal_tension_comparison_filepath = os.path.join(args.out_dir, out_tonal_tension_comparison_filename)
     # Convert key to root and mode
     # root, mode = key2muspy_dict[key]
     output_org_muspy = compute_muspy_metrics(args.midi_path1, args.key)
     output_gen_muspy = compute_muspy_metrics(args.midi_path2, args.key)
-    print(output_org_muspy)
-    print(output_gen_muspy)
     out_muspy_comparison_filename = comparison_prefix + '_muspy_metrics.pdf'
     out_muspy_comparison_filepath = os.path.join(args.out_dir, out_muspy_comparison_filename)
     plot_tonal_tension_comparison(
@@ -93,4 +90,21 @@ if __name__ == '__main__':
         title=f"MusPy Metrics: {args.task} of  {output_org_muspy['info']['song_name']}",
         save_img_path=out_muspy_comparison_filepath,
     )
+
+    # Combine and save tonal tension and muspy metrics as json
+    metric_pairs["Original Tonal Tension Diameter"] = np.mean(output_org_tension['diameter'])
+    metric_pairs["Generated Tonal Tension Diameter"] = np.mean(output_gen_tension['diameter'])
+    metric_pairs["Original Tonal Tension Tensile"] = np.mean(output_org_tension['tensile'])
+    metric_pairs["Generated Tonal Tension Tensile"] = np.mean(output_gen_tension['tensile'])
+    metric_pairs["Original Tonal Tension Centroid Diff"] = np.mean(output_org_tension['centroid_diff'])
+    metric_pairs["Generated Tonal Tension Centroid Diff"] = np.mean(output_gen_tension['centroid_diff'])
+    
+    metric_pairs["muspy_metrics"] = {
+        "org": output_org_muspy,
+        "gen": output_gen_muspy
+    }
+
+    with open(out_json_filepath, "w") as outfile:
+        json.dump(metric_pairs, outfile)
+
     print("Saved objective metrics to {}".format(args.out_dir))

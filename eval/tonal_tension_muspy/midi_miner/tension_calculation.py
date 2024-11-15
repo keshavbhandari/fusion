@@ -822,7 +822,7 @@ def key_to_key_pos(key_indices: List[int], key_pos: int) -> ndarray:
 # if __name__ == "__main__":
 
 
-def calculate_tonal_tension(file_name: str, output_folder: str, key_name: str, key_changed: bool):
+def calculate_tonal_tension(file_name: str, output_folder: str, key_name: str, key_changed: bool, win_sz: int = -1):
     args.file_name = file_name
     args.output_folder = os.path.abspath(output_folder)
     args.key_name = key_name
@@ -881,11 +881,11 @@ def calculate_tonal_tension(file_name: str, output_folder: str, key_name: str, k
             key_name = all_key_names
 
             result = cal_tension(file_name, pm, piano_roll, sixteenth_time, beat_time, beat_indices, down_beat_time,
-                                 down_beat_indices, args.output_folder, args.window_size, key_name)
+                                 down_beat_indices, args.output_folder, win_sz, key_name)
 
         else:
             result = cal_tension(file_name, pm, piano_roll, sixteenth_time, beat_time, beat_indices, down_beat_time,
-                                 down_beat_indices, args.output_folder, args.window_size, [args.key_name])
+                                 down_beat_indices, args.output_folder, win_sz, [args.key_name])
 
         total_tension, diameters, centroid_diff, key_name, key_change_time, key_change_bar, key_change_name, new_output_foler, window_time = result
 
@@ -956,7 +956,7 @@ def calculate_tonal_tension(file_name: str, output_folder: str, key_name: str, k
             result_key = sorted(count_result, key=count_result.get, reverse=True)[0]
 
             result = cal_tension(file_name, pm, piano_roll, sixteenth_time, beat_time, beat_indices, down_beat_time,
-                                 down_beat_indices, args.output_folder, args.window_size, [result_key])
+                                 down_beat_indices, args.output_folder, win_sz, [result_key])
 
             total_tension, diameters, centroid_diff, key_name, key_change_time, key_change_bar, key_change_name, new_output_foler, window_time = result
 
