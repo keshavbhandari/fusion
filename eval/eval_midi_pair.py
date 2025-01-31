@@ -92,12 +92,18 @@ if __name__ == '__main__':
     )
 
     # Combine and save tonal tension and muspy metrics as json
-    metric_pairs["Original Tonal Tension Diameter"] = np.mean(output_org_tension['diameter'])
-    metric_pairs["Generated Tonal Tension Diameter"] = np.mean(output_gen_tension['diameter'])
-    metric_pairs["Original Tonal Tension Tensile"] = np.mean(output_org_tension['tensile'])
-    metric_pairs["Generated Tonal Tension Tensile"] = np.mean(output_gen_tension['tensile'])
-    metric_pairs["Original Tonal Tension Centroid Diff"] = np.mean(output_org_tension['centroid_diff'])
-    metric_pairs["Generated Tonal Tension Centroid Diff"] = np.mean(output_gen_tension['centroid_diff'])
+    # metric_pairs["Original Tonal Tension Diameter"] = np.mean(output_org_tension['diameter'])
+    # metric_pairs["Generated Tonal Tension Diameter"] = np.mean(output_gen_tension['diameter'])
+    # metric_pairs["Original Tonal Tension Tensile"] = np.mean(output_org_tension['tensile'])
+    # metric_pairs["Generated Tonal Tension Tensile"] = np.mean(output_gen_tension['tensile'])
+    # metric_pairs["Original Tonal Tension Centroid Diff"] = np.mean(output_org_tension['centroid_diff'])
+    # metric_pairs["Generated Tonal Tension Centroid Diff"] = np.mean(output_gen_tension['centroid_diff'])
+    metric_pairs["Original Tonal Tension Diameter"] = np.mean(np.abs(np.diff(output_org_tension['diameter'])))
+    metric_pairs["Generated Tonal Tension Diameter"] = np.mean(np.abs(np.diff(output_gen_tension['diameter'])))
+    metric_pairs["Original Tonal Tension Tensile"] = np.mean(np.abs(np.diff(output_org_tension['tensile'])))
+    metric_pairs["Generated Tonal Tension Tensile"] = np.mean(np.abs(np.diff(output_gen_tension['tensile'])))
+    metric_pairs["Original Tonal Tension Centroid Diff"] = np.mean(np.abs(np.diff(output_org_tension['centroid_diff'])))
+    metric_pairs["Generated Tonal Tension Centroid Diff"] = np.mean(np.abs(np.diff(output_gen_tension['centroid_diff'])))
     
     metric_pairs["muspy_metrics"] = {
         "org": output_org_muspy,

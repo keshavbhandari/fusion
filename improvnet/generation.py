@@ -96,7 +96,11 @@ def generate_one_pass(tokenized_sequence, fusion_model, configs,
             break
 
         if random.random() < corruption_rate:
-            output_dict = corruption_obj.apply_random_corruption(tokenized_sequence, context_before=context_before, context_after=context_after, meta_data=[convert_to], t_segment_ind=t_segment_ind, inference=False, corruption_type=corruption_type, run_corruption=True, exclude_idx=novelty_segments)
+            if corruption_type == "random":
+                corruption_type_tmp = random.choice(list(corruption_obj.corruption_functions.keys()))
+                output_dict = corruption_obj.apply_random_corruption(tokenized_sequence, context_before=context_before, context_after=context_after, meta_data=[convert_to], t_segment_ind=t_segment_ind, inference=False, corruption_type=corruption_type_tmp, run_corruption=True, exclude_idx=novelty_segments)
+            else:
+                output_dict = corruption_obj.apply_random_corruption(tokenized_sequence, context_before=context_before, context_after=context_after, meta_data=[convert_to], t_segment_ind=t_segment_ind, inference=False, corruption_type=corruption_type, run_corruption=True, exclude_idx=novelty_segments)
             index = output_dict['index']
             corrupted_sequence = output_dict['corrupted_sequence']
             corrupted_sequence = unflatten_corrupted(corrupted_sequence)
@@ -222,13 +226,13 @@ def generate(midi_file_path, audio_file_path, fusion_model, configs, novel_peaks
     # Generate by iterating with multiple passes
     passes = len(corruption_passes.keys())
     data_corruption_obj = DataCorruption()
-    corruptions = list(data_corruption_obj.corruption_functions.keys())
+    # corruptions = list(data_corruption_obj.corruption_functions.keys())
     for i in range(passes):
         if not quiet:
             print("Pass:", i + 1)
         corruption_type = corruption_passes['pass_' + str(i + 1)]['corruption_type']
-        if corruption_type == "random":
-            corruption_type = random.choice(corruptions)
+        # if corruption_type == "random":
+        #     corruption_type = random.choice(corruptions)
         corruption_rate = corruption_passes['pass_' + str(i + 1)]['corruption_rate']
         # Generate the sequence
         tokenized_sequence = generate_one_pass(tokenized_sequence, fusion_model, configs, 

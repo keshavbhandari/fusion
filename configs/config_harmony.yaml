@@ -49,7 +49,7 @@ training:
 generation:
   convert_from: classical
   convert_to: classical # Choose from ['jazz', 'classical'].
-  midi_file_path: "/homes/kb658/fusion/input/Michael J. Smith - Agnus Dei.mid"
+  midi_file_path: "/homes/kb658/fusion/input/Peter Drischel - Slow Motion (Transcribed Blues Sax).mid"
   wav_file_path: "" # No wav file path indicates that novel peaks will not be preserved for the harmony generation task.
   novel_peaks_pct: 0.0 # Percentage of novel peaks to be preserved.
   context_before: 5 # Number of context frames before the corruption segment. Use 5 for harmonization.

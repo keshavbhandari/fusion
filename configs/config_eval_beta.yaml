@@ -48,48 +48,63 @@ training:
 
 generation:
   convert_from: classical
-  convert_to: classical # Choose from ['jazz', 'classical'].
-  midi_file_path: "/homes/kb658/fusion/input/reverie_(c)galimberti.mid"
-  wav_file_path: ""
+  convert_to: jazz # Choose from ['jazz', 'classical'].
+  midi_file_path: "/homes/kb658/fusion/input/suite_bergamasque_4_(c)dery.mid"
+  wav_file_path: "/homes/kb658/fusion/input/suite_bergamasque_4_(c)dery.wav"
   temperature: 1.0 # Temperature for sampling.
-  novel_peaks_pct: 0 # Percentage of novel peaks to be preserved.
-  context_before: 5 # Number of context frames before the corruption segment.
-  context_after: 4 # Number of context frames after the corruption segment.
-  t_segment_start: 1 # Start frame of the corruption segment. Each frame is 5 seconds long. For example, 2 corresponds to 0-10 seconds which would be preserved. The model will corrupt the next segment onwards.
+  novel_peaks_pct: 0.10 # Percentage of novel peaks to be preserved.
+  context_before: 2 # Number of context frames before the corruption segment.
+  context_after: 1 # Number of context frames after the corruption segment.
+  t_segment_start: 2 # Start frame of the corruption segment. Each frame is 5 seconds long. For example, 2 corresponds to 0-10 seconds which would be preserved. The model will corrupt the next segment onwards.
   t_segment_stop: -1 # Stop frame of the corruption segment. Must be greater than t_segment_start. -1 will go to the end of the piece.
   end_original: True # If True, the model will use the original melody as the end of the harmony.
   write_intermediate_passes: True # If True, the model will write the intermediate passes to the output folder.
   passes:
     pass_1:
-      corruption_rate: 1.0
-      corruption_type: skyline
-    pass_2:
-      corruption_rate: 1.0
-      corruption_type: skyline
-    pass_3:
-      corruption_rate: 1.0
-      corruption_type: note_modification
-    pass_4:
-      corruption_rate: 0.5
-      corruption_type: pitch_velocity_mask
-    pass_5:
-      corruption_rate: 0.5
-      corruption_type: fragmentation
-    pass_6:
-      corruption_rate: 0.5
-      corruption_type: fragmentation
-    pass_7:
       corruption_rate: 0.5
       corruption_type: whole_mask
-    pass_8:
-      corruption_rate: 1.0
-      corruption_type: note_modification
-    pass_9:
-      corruption_rate: 1.0
-      corruption_type: skyline
-    pass_10:
-      corruption_rate: 1.0
-      corruption_type: permute_pitches
+    pass_2:
+      corruption_rate: 0.25
+      corruption_type: whole_mask
+    pass_3:
+      corruption_rate: 0.5
+      corruption_type: whole_mask
+    pass_4:
+      corruption_rate: 0.5
+      corruption_type: whole_mask
+    pass_5:
+      corruption_rate: 0.25
+      corruption_type: whole_mask
+  #   pass_1:
+  #     corruption_rate: 0.75
+  #     corruption_type: incorrect_transposition
+  #   pass_2:
+  #     corruption_rate: 0.75
+  #     corruption_type: skyline
+  #   pass_3:
+  #     corruption_rate: 0.5
+  #     corruption_type: note_modification
+  #   pass_4:
+  #     corruption_rate: 0.5
+  #     corruption_type: permute_pitch_velocity
+  #   pass_5:
+  #     corruption_rate: 0.25
+  #     corruption_type: pitch_velocity_mask
+  #   pass_6:
+  #     corruption_rate: 0.75
+  #     corruption_type: skyline
+  #   pass_7:
+  #     corruption_rate: 1.0
+  #     corruption_type: onset_duration_mask
+  #   pass_8:
+  #     corruption_rate: 0.25
+  #     corruption_type: fragmentation
+  #   pass_9:
+  #     corruption_rate: 0.25
+  #     corruption_type: whole_mask
+  #   pass_10:
+  #     corruption_rate: 1.0
+  #     corruption_type: skyline
 
 raw_data:
   raw_data_folders: 

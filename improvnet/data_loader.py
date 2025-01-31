@@ -253,29 +253,6 @@ if __name__ == "__main__":
         
     artifact_folder = configs["raw_data"]["artifact_folder"]
     raw_data_folders = configs["raw_data"]["raw_data_folders"]
-
-    # # Get tokenizer
-    # tokenizer_filepath = os.path.join(artifact_folder, "style_transfer", "vocab_corrupted.pkl")
-    # # Load the tokenizer dictionary
-    # with open(tokenizer_filepath, "rb") as f:
-    #     tokenizer = pickle.load(f)
-    # # Reverse the tokenizer
-    # decode_tokenizer = {v: k for k, v in tokenizer.items()}
-
-
-    # Open the train, validation, and test set files
-    # with open(os.path.join(artifact_folder, "style_transfer", "pre_training_train.pkl"), "rb") as f:
-    #     train_sequences = pickle.load(f)
-    # with open(os.path.join(artifact_folder, "style_transfer", "pre_training_valid.pkl"), "rb") as f:
-    #     valid_sequences = pickle.load(f)
-    
-    # # Open the train, validation, and test set files
-    # with open(os.path.join(artifact_folder, "fusion", "train.json"), "r") as f:
-    #     train_sequences = json.load(f)
-    # # with open(os.path.join(artifact_folder, "fusion", "valid.json"), "r") as f:
-    # #     valid_sequences = json.load(f)
-        
-    # train_sequences = [s for s in train_sequences if s[-1] == "jazz"]
     
     run_fusion = False
 
