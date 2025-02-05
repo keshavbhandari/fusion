@@ -56,8 +56,7 @@ gdown.download(artifacts_url, artifacts_out, quiet=False)
 !unzip -q /content/improvnet/artifacts.zip -d /content/improvnet/
 ```
 
-## Instructions to generate midi files
-
+## Instructions to generate with your own midi files
 First we need to generate the YAML config file and then we can use the YAML filepath to generate the midi piece for each task.
 
 To generate with ImprovNet, specify the midi filepath and the wav filepath (see the Colab notebook to see how the midi file is converted to wav). Then place both filepaths in the input folder. **Note - the midi file must contain only piano track!**
