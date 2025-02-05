@@ -17,12 +17,14 @@ ImprovNet is a transformer-based model designed to generate **expressive and con
 - **Short musical infilling**
 - **User control over the degree of improvisation and structure preservation**  
 
-ImprovNet outperforms existing models like **Anticipatory Music Transformer (AMT)** in continuation and infilling tasks. It also achieves **highly recognizable jazz-style improvisations**, with 79% of listeners correctly identifying genre transformations.  
+ImprovNet outperforms **Anticipatory Music Transformer (AMT)** in short continuation and infilling tasks. It also achieves **highly recognizable jazz-style improvisations**, with 79% of listeners correctly identifying genre transformations.  
 
 ImprovNet relies on a corruption-refinement training strategy similar to [**Yin-Yang**](https://github.com/keshavbhandari/yinyang), to generate music in an improvisational style of the original composition. The entire piece is segmented into 5-second segments. During training (see figure below), a random segment is selected with context segments on its left and right. This segment is corrupted using one of the corruption functions described in the paper. The corrupted segment, combined with the original context, is fed into a transformer encoder along with conditional tokens for the genre and corruption type. The transformer decoder learns to reconstruct the original segment.
+
 ![Corruption Refinement Training](assets/trainingphase.png)
 
 During generation (see figure below), 5-second segments are processed iteratively. A chosen segment is corrupted and refined based on a probability similar to that of training. For cross-genre improvisation, refinement conditions on the target genre token. This process iterates from beginning to end several times, gradually shaping the piece into the target genre.
+
 ![Iterative Generation](assets/generationphase.png)
 
 For more details, refer to the paper:  
@@ -31,12 +33,14 @@ For more details, refer to the paper:
 ---
 
 ## Setup Instructions
+You need Python 3.10 or later to run this code.
 
 ### Clone the repository and install dependencies
 ```bash
 !git clone https://github.com/keshavbhandari/improvnet.git
 %cd improvnet
 %pip install -r requirements.txt
+%pip install git+https://github.com/geoffroypeeters/ssmnet_ISMIR2023.git
 ```
 
 ### Download data and model artifacts
@@ -52,7 +56,7 @@ gdown.download(artifacts_url, artifacts_out, quiet=False)
 !unzip -q /content/improvnet/artifacts.zip -d /content/improvnet/
 ```
 
-### Instructions to generate midi files
+## Instructions to generate midi files
 
 First we need to generate the YAML config file and then we can use the YAML filepath to generate the midi piece for each task.
 
@@ -90,8 +94,7 @@ There are 9 different types of corruptions that the model is trained on:
 To generate an improvisation of a piece, you need to prepare the config file first. For intra-genre improvisations, we recommend converting the midi file to wav and listing the filepaths for both. The wav file is needed for the SSMNet algorithm to preserve novel segments in the music. However, if you decide not to preserve any segments, then no wav file is needed and the Preservation Ratio parameter can be set to 0. In addition, you may want to modify the corruption functions and number of passes to get the improvisation that works for you. See the default values in the config file to get started and run the code below. The outputs for each pass will be stored in the output folder.
 
 #### Note on which corruption to use:
-When the beat of the music is too strong, we suggest not to use onset duration mask. If there are many repetitions in the music or if the generated music isn't changing much compared to the original, we suggest using the pitch velocity mask or whole mask for multiple passes. To change the harmony, we suggest using skyline for multiple passes. A combination of different corruptions is recommended for genre style transfer.
-
+When the beat of the music is too strong, we suggest not to use onset duration mask. If there are many repetitions in the music or if the generated music isn't changing much compared to the original, we suggest using the pitch velocity mask or whole mask for multiple passes. To change the harmony, we suggest using skyline for multiple passes. To achieve gradual changes, we suggest using the note modification corruption. A combination of different corruptions is recommended for cross-genre improvisation.
 
 ```bash
 !python improvnet/generation.py --config configs/config_style_transfer.yaml
@@ -136,7 +139,7 @@ To train individual models, use the following commands:
   !python improvnet/train_classifier.py --config configs/configs_style_transfer.yaml
   ```
 
-## Citation
+<!-- ## Citation
 
 If you use this repository in your work, please cite:
 
@@ -149,4 +152,4 @@ If you use this repository in your work, please cite:
   archivePrefix = {arXiv},
   eprint    = {2501.XXXXX}, % Replace with actual arXiv identifier
   primaryClass = {cs.SD} % Adjust field if necessary (e.g., cs.AI, cs.LG)
-}
+} -->

@@ -5,11 +5,10 @@ miditoolkit==1.0.1
 numpy
 pandas==2.2.2
 PyYAML==6.0.1
-# torch==2.1.0
+# torch>=2.1.0
 tqdm==4.66.2
 transformers==4.40.1
 pretty_midi
-# git+https://github.com/geoffroypeeters/ssmnet_ISMIR2023.git
 coloredlogs
 music21
 muspy
